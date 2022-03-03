@@ -1,4 +1,5 @@
-{ open Parse }
+{ open Parse
+  open Scanf }
 
 let alpha = ['a'-'z' 'A'-'Z']
 let escape = '\\' ['\\' ''' '"' 'n' 'r' 't']
@@ -49,11 +50,15 @@ rule token = parse
   | "void"   { VOID }
   | "char"   { CHAR }
   | "list"   { LIST }
-  | "true"   { BLIT(true)  }
-  | "false"  { BLIT(false) }
+  | "true"   { BOOLLIT(true)  }
+  | "false"  { BOOLLIT(false) }
   | "type"   { TYPEDEF }
   | "record" { RECORD }
-  | int as lem { LITERAL(int_of_string lem) }
+  | int as lem { INTLIT(int_of_string lem) }
+  | float as lem { FLOATLIT(float_of_string lem)}
+  | char as lem { CHARLIT(String.get lem 1)}
+  | string as lem { STRLIT(Scanf.unescaped lem)}
+  | escape_char as lem { CHARLIT(String.get (Scanf.unescaped lem) 1) }
   | id as lem { ID(lem) }
   | eof { EOF }
   | _ as char { raise (Failure("illegal character " ^ Char.escaped char)) }
