@@ -20,12 +20,16 @@ rule token = parse
   | ')'      { RPAREN }
   | '{'      { LBRACE }
   | '}'      { RBRACE }
+  | '['      { LBRACK }
+  | ']'      { RBRACK }
+  | '.'      { DOT }
   | ';'      { SEMI }
   | ','      { COMMA }
   | '+'      { PLUS }
   | '-'      { MINUS }
   | '*'      { MULT }
   | '/'      { DIV }
+  | '%'      { MOD }
   | '='      { ASSIGN }
   | "=="     { EQ }
   | "!="     { NEQ }
@@ -51,8 +55,8 @@ rule token = parse
   | "void"   { VOID }
   | "char"   { CHAR }
   | "list"   { LIST } 
-  | "true"   { BOOLLIT(true)  }
-  | "false"  { BOOLLIT(false) }
+  | "true"   { TRUE }
+  | "false"  { FALSE }
   | "type"   { TYPEDEF }
   | "record" { RECORD }
   | int as lem { INTLIT(int_of_string lem) }

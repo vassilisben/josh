@@ -45,11 +45,12 @@ typ:
   | FLOAT   { Float }
   | CHAR    { Char }
   | STRING  { String }
-  | LIST    { List }
+  | LIST typ    { List($1) }
   | VOID    { Void }
+  | RECORD ID { RecordType($2) } 
 
 stmt_list:
-    /* nothing */               { []     }
+    /* nothing */               { [] }
     | stmt stmt_list  { $1::$2 }
 
 stmt:
@@ -60,18 +61,43 @@ stmt:
 
 expr_list:
     /* nothing */   { [] }
-    | expr expr_list { $1::$2 }
+    | expr_list COMMA expr { $3::$1 }
 
 expr:
-  | BLIT                          { BoolLit $1            }
-  | LITERAL                       { Literal $1            }
-  | ID                            { Id $1                 }
+  /* literals */
+  | BOOLLIT                      { BoolLit $1  }
+  | INTLIT                       { IntLit $1   }
+  | FLOATLIT                     { FloatLit $1 }
+  | CHARLIT                      { CharLit $1  }
+  | STRLIT                       { StrLit $1   } 
+  | TRUE 			 { BoolLit(true)  }
+  | FALSE 			 { BoolLit(false) }  
+  | ID                           { Id $1         }
+  /* arithmetic expressions */
   | expr PLUS expr      { Binop ($1, Add, $3)   }
   | expr MINUS expr     { Binop ($1, Sub, $3)   }
+  | expr DIV expr       { Binop ($1, Add, $3)   }
+  | expr MULT expr      { Binop ($1, Sub, $3)   }
+  | expr MOD expr        { Binop ($1, Mod, $3)  }
+  /* equality */
   | expr EQ expr        { Binop ($1, Equal, $3) }
   | expr NEQ expr       { Binop ($1, Neq, $3)   }
   | expr LT expr        { Binop ($1, Less, $3)  }
+  | expr LEQ expr       { Binop ($1, Leq, $3)  }
+  | expr GT expr        { Binop ($1, Greater, $3)  }
+  | expr GEQ expr       { Binop ($1, Geq, $3)  }
+  | expr LT expr        { Binop ($1, Less, $3)  }
+  /* logical */
   | expr AND expr       { Binop ($1, And, $3)   }
   | expr OR expr        { Binop ($1, Or, $3)    }
+  | NOT expr		{ Unop (Not, $2)	}
   | ID ASSIGN expr           { Assign ($1, $3)       }
   | LPAREN expr RPAREN       { $2                    }
+  /* list */ 
+  | LBRACK expr_list RBRACK	{ ListLit(List.rev $2)	} 
+
+decl_var:
+  | TYP ID		{ Declare($1, $2) } 
+  | TYP ID ASSIGN expr	{ Initialize($1, $2, $4)}
+
+
