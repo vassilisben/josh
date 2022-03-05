@@ -8,7 +8,7 @@ open Ast
 %token PLUS MINUS ASSIGN MULT DIV
 %token EQ NEQ LT GT LEQ GEQ AND OR NOT
 %token IF ELSE FOR IN WHILE BREAK CONTINUE RETURN
-%token INT BOOL FLOAT STRING VOID CHAR LIST 
+%token INT BOOL FLOAT STRING VOID CHAR LIST
 %token <int> INTLIT
 %token <char> CHARLIT
 %token <string> STRLIT
@@ -47,7 +47,7 @@ typ:
   | STRING  { String }
   | LIST typ    { List($1) }
   | VOID    { Void }
-  | RECORD ID { RecordType($2) } 
+  | RECORD ID { RecordType($2) }
 
 stmt_list:
     /* nothing */               { [] }
@@ -58,7 +58,8 @@ stmt:
   | LBRACE stmt_list RBRACE                          { Block $2        }
   | IF LPAREN expr RPAREN stmt ELSE stmt   { If ($3, $5, $7) }
   | FOR LPAREN ID IN expr RPAREN stmt { For ($3, $5, $7) }
-  | WHILE LPAREN expr RPAREN stmt               { While ($3,$5) }
+  | WHILE LPAREN expr RPAREN stmt               { While ($3,$5)   }
+  | RECORD ID LBRACE opts_list RBRACE { RecordDef($2, $4) }
 
 expr_list:
     /* nothing */   { [] }
@@ -70,9 +71,9 @@ expr:
   | INTLIT                       { IntLit $1   }
   | FLOATLIT                     { FloatLit $1 }
   | CHARLIT                      { CharLit $1  }
-  | STRLIT                       { StrLit $1   } 
-  | TRUE 			 { BoolLit(true)  }
-  | FALSE 			 { BoolLit(false) }  
+  | STRLIT                       { StrLit $1   }
+  | TRUE             { BoolLit(true)  }
+  | FALSE            { BoolLit(false) }
   | ID                           { Id $1         }
   /* arithmetic expressions */
   | expr PLUS expr      { Binop ($1, Add, $3)   }
@@ -91,14 +92,35 @@ expr:
   /* logical */
   | expr AND expr       { Binop ($1, And, $3)   }
   | expr OR expr        { Binop ($1, Or, $3)    }
-  | NOT expr		{ Unop (Not, $2)	}
+  | NOT expr        { Unop (Not, $2)    }
   | ID ASSIGN expr           { Assign ($1, $3)       }
   | LPAREN expr RPAREN       { $2                    }
-  /* list */ 
-  | LBRACK expr_list RBRACK	{ ListLit(List.rev $2)	} 
+  /* list */
+  | LBRACK expr_list RBRACK { ListLit(List.rev $2)  }
+  | expr LBRACK expr RBRACK { ListAccess($1, $2) }
+  | expr DOT ID { RecordAccess($1, $2) }
+  /* record instantiation */
+  | ID LBRACE actuals_list RBRACE { RecordCreate($1,$3) }
+  /* mutation */
+  | expr DOT ID ASSIGN expr { MutateRecord(($1,$3), $4) }
+  | expr LBRACK expr RBRACK ASSIGN expr { MutateList(($1,$3), $6) }
 
 decl_var:
-  | TYP ID		{ Declare($1, $2) } 
-  | TYP ID ASSIGN expr	{ Initialize($1, $2, $4)}
+  | TYP ID      { Declare($1, $2) }
+  | TYP ID ASSIGN expr  { Initialize($1, $2, $4)}
 
+/* for record field and function argument lists */
+opts_list:
+    /* nothing */   { [] }
+    | opts_list COMMA opt { $3::$1 }
 
+opt:
+    typ ID { Opt($1,$2) }
+
+/* for instantiating records and calling functions */
+actuals_list:
+    /* nothing */ { [] }
+    | actuals_list COMMA actual { $3::$1 }
+
+actual:
+    expr { $1 }
