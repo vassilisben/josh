@@ -1,4 +1,4 @@
-/* Ocamlyacc parser for NanoC */
+/* Ocamlyacc parser for Josh */
 
 %{
 open Ast
@@ -20,10 +20,14 @@ open Ast
 %type <Ast.program> program
 
 %right ASSIGN
+%left NOT
 %left OR
 %left AND
 %left EQ NEQ
-%left LT
+%left LT LEQ
+%left GT GEQ
+%left MOD
+%left MULT DIV
 %left PLUS MINUS
 
 %%
