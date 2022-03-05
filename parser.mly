@@ -48,10 +48,23 @@ typ:
   | LIST typ    { List($1) }
   | VOID    { Void }
   | RECORD ID { RecordType($2) }
+  | typ ID LPAREN opts_list RPAREN { FunkType($2, $4, $1) }
+      /*
+      record Thing {
+          string name;
+          int fptr(char c, float d);
+      }
+      record Thing myThing = { "josh", func };
+      myThing.func(c, d);
+
+      */
 
 stmt_list:
     /* nothing */               { [] }
     | stmt stmt_list  { $1::$2 }
+
+func_decl:
+    typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE { Funk($2, $4, $7, $1) }
 
 stmt:
   expr SEMI                                          { Expr $1         }
@@ -104,6 +117,10 @@ expr:
   /* mutation */
   | expr DOT ID ASSIGN expr { MutateRecord(($1,$3), $4) }
   | expr LBRACK expr RBRACK ASSIGN expr { MutateList(($1,$3), $6) }
+  /* function call */
+  | ID LPAREN actuals_list RPAREN { Call($1, $3) }
+  | expr DOT ID LPAREN actuals_list RPAREN { CallRecord(($1,$3), $5) }
+  | expr LBRACK expr RBRACK LPAREN actuals_list RPAREN { CallList(($1,$3), $6) }
 
 decl_var:
   | TYP ID      { Declare($1, $2) }
