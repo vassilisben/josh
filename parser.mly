@@ -42,6 +42,11 @@ vdecl:
 typ:
   INT       { Int  }
   | BOOL    { Bool }
+  | FLOAT   { Float }
+  | CHAR    { Char }
+  | STRING  { String }
+  | LIST    { List }
+  | VOID    { Void }
 
 stmt_list:
     /* nothing */               { []     }
