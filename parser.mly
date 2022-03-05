@@ -58,6 +58,10 @@ stmt:
   | IF LPAREN expr RPAREN stmt ELSE stmt   { If ($3, $5, $7) }
   | WHILE LPAREN expr RPAREN stmt               { While ($3,$5)   }
 
+expr_list:
+    /* nothing */   { [] }
+    | expr expr_list { $1::$2 }
+
 expr:
   | BLIT                          { BoolLit $1            }
   | LITERAL                       { Literal $1            }
