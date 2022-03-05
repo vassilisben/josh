@@ -37,7 +37,7 @@ program:
 
 top_level_list:
   { [] }
-  top_level top_level_list { $1::$2 }
+  | top_level top_level_list { $1::$2 }
 
 top_level:
     stmt
@@ -79,6 +79,7 @@ stmt:
   | FOR LPAREN ID IN expr RPAREN stmt { For ($3, $5, $7) }
   | WHILE LPAREN expr RPAREN stmt               { While ($3,$5)   }
   | RECORD ID LBRACE opts_list RBRACE { RecordDef($2, $4) }
+  | RETURN expr { Return $1 }
 
 expr_list:
     /* nothing */   { [] }
