@@ -16,7 +16,6 @@ let whitespace = [' ' '\t' '\r' '\n']
 rule token = parse
   | whitespace { token lexbuf }
   | "{|"     { comment lexbuf }
-  | '`'      { BASH }
   | '('      { LPAREN }
   | ')'      { RPAREN }
   | '{'      { LBRACE }
@@ -51,7 +50,7 @@ rule token = parse
   | "string" { STRING }
   | "void"   { VOID }
   | "char"   { CHAR }
-  | "list"   { LIST }
+  | "list"   { LIST } 
   | "true"   { BOOLLIT(true)  }
   | "false"  { BOOLLIT(false) }
   | "type"   { TYPEDEF }
