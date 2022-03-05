@@ -29,15 +29,17 @@ open Ast
 %%
 
 program:
-  vdecl_list stmt_list EOF { {locals=$1; body=$2} }
+  top_level_list EOF { $1 }
 
-vdecl_list:
-  /*nothing*/                   { []       }
-  | vdecl vdecl_list  { $1 :: $2 }
+top_level_list:
+  { [] }
+  top_level top_level_list { $1::$2 }
 
-vdecl:
-  typ ID SEMI { ($1, $2) }
-
+top_level:
+    stmt
+  | vdecl
+  | fdecl
+  | expr
 
 typ:
   INT       { Int  }
@@ -63,7 +65,7 @@ stmt_list:
     /* nothing */               { [] }
     | stmt stmt_list  { $1::$2 }
 
-func_decl:
+fdecl:
     typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE { Funk($2, $4, $7, $1) }
 
 stmt:
@@ -122,7 +124,7 @@ expr:
   | expr DOT ID LPAREN actuals_list RPAREN { CallRecord(($1,$3), $5) }
   | expr LBRACK expr RBRACK LPAREN actuals_list RPAREN { CallList(($1,$3), $6) }
 
-decl_var:
+vdecl:
   | TYP ID      { Declare($1, $2) }
   | TYP ID ASSIGN expr  { Initialize($1, $2, $4)}
 
