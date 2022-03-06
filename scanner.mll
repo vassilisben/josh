@@ -7,7 +7,7 @@ let escape_char = ''' (escape) '''
 let ascii = ([' '-'!' '#'-'[' ']'-'~'])
 let digit = ['0'-'9']
 let id = (alpha | '_') (alpha | digit | '_')* (* keywords??? *)
-let string = '"' ( (ascii | escape)* ) '"'
+let string = '"' ( (ascii | escape)* as lem ) '"'
 let char = ''' ( ascii ) ''' (* digit? *)
 let float = ((digit+) ['.'] digit*) | ((digit*) ['.'] digit+)
 let int = digit+
@@ -61,7 +61,7 @@ rule token = parse
   | int as lem { INTLIT(int_of_string lem) }
   | float as lem { FLOATLIT(float_of_string lem)}
   | char as lem { CHARLIT(String.get lem 1)}
-  | string as lem { STRLIT(Scanf.unescaped lem)}
+  | string { STRLIT(Scanf.unescaped lem)}
   | escape_char as lem { CHARLIT(String.get (Scanf.unescaped lem) 1) }
   | id as lem { ID(lem) }
   | eof { EOF }
