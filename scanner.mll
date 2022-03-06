@@ -1,4 +1,4 @@
-{ open Parse
+{ open Parser
   open Scanf }
 
 let alpha = ['a'-'z' 'A'-'Z']
@@ -7,7 +7,7 @@ let escape_char = ''' (escape) '''
 let ascii = ([' '-'!' '#'-'[' ']'-'~'])
 let digit = ['0'-'9']
 let id = (alpha | '_') (alpha | digit | '_')* (* keywords??? *)
-let string = '"' ( (ascii | escape)* as s ) '"'
+let string = '"' ( (ascii | escape)* ) '"'
 let char = ''' ( ascii ) ''' (* digit? *)
 let float = ((digit+) ['.'] digit*) | ((digit*) ['.'] digit+)
 let int = digit+
@@ -57,7 +57,6 @@ rule token = parse
   | "list"   { LIST } 
   | "true"   { TRUE }
   | "false"  { FALSE }
-  | "type"   { TYPEDEF }
   | "record" { RECORD }
   | int as lem { INTLIT(int_of_string lem) }
   | float as lem { FLOATLIT(float_of_string lem)}

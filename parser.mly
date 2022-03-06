@@ -4,15 +4,18 @@
 open Ast
 %}
 
-%token BASH SEMI LPAREN RPAREN LBRACE RBRACE COMMA
-%token PLUS MINUS ASSIGN MULT DIV
+%token BASH SEMI LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE COMMA DOT
+%token PLUS MINUS ASSIGN MULT DIV MOD
 %token EQ NEQ LT GT LEQ GEQ AND OR NOT
 %token IF ELSE FOR IN WHILE BREAK CONTINUE RETURN
 %token INT BOOL FLOAT STRING VOID CHAR LIST
+%token RECORD
 %token <int> INTLIT
 %token <char> CHARLIT
 %token <string> STRLIT
-%token <bool> BLIT
+%token <bool> BOOLLIT
+%token TRUE FALSE
+%token <float> FLOATLIT
 %token <string> ID
 %token EOF
 
@@ -40,10 +43,10 @@ top_level_list:
   | top_level top_level_list { $1::$2 }
 
 top_level:
-    stmt
-  | vdecl
-  | fdecl
-  | expr
+  | stmt { Stmt $1 }
+  | vdecl { Vdecl $1 }
+  | fdecl { Fdecl $1 }
+  | expr  { Expr $1 }
 
 typ:
   INT       { Int  }
@@ -70,7 +73,7 @@ stmt_list:
     | stmt stmt_list  { $1::$2 }
 
 fdecl:
-    typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE { Funk($2, $4, $7, $1) }
+    typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE { { id=$2; params=$4; body=$7; return_type=$1 } }
 
 stmt:
   expr SEMI                                          { Expr $1         }
@@ -79,7 +82,7 @@ stmt:
   | FOR LPAREN ID IN expr RPAREN stmt { For ($3, $5, $7) }
   | WHILE LPAREN expr RPAREN stmt               { While ($3,$5)   }
   | RECORD ID LBRACE opts_list RBRACE { RecordDef($2, $4) }
-  | RETURN expr { Return $1 }
+  | RETURN expr { Return $2 }
 
 expr_list:
     /* nothing */   { [] }
@@ -121,7 +124,7 @@ expr:
   /* record instantiation */
   | ID LBRACE actuals_list RBRACE { RecordCreate($1,$3) }
   /* mutation */
-  | expr DOT ID ASSIGN expr { MutateRecord(($1,$3), $4) }
+  | expr DOT ID ASSIGN expr { MutateRecord(($1,$3), $5) }
   | expr LBRACK expr RBRACK ASSIGN expr { MutateList(($1,$3), $6) }
   /* function call */
   | ID LPAREN actuals_list RPAREN { Call($1, $3) }
@@ -129,8 +132,8 @@ expr:
   | expr LBRACK expr RBRACK LPAREN actuals_list RPAREN { CallList(($1,$3), $6) }
 
 vdecl:
-  | TYP ID      { Declare($1, $2) }
-  | TYP ID ASSIGN expr  { Initialize($1, $2, $4)}
+  | typ ID      { Declare($1, $2) }
+  | typ ID ASSIGN expr  { Initialize($1, $2, $4)}
 
 /* for record field and function argument lists */
 opts_list:
@@ -146,4 +149,4 @@ actuals_list:
     | actuals_list COMMA actual { $3::$1 }
 
 actual:
-    expr { $1 }
+    expr { Actual $1 }
