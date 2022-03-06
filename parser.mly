@@ -51,7 +51,7 @@ typ:
   | FLOAT   { Float }
   | CHAR    { Char }
   | STRING  { String }
-  | LIST typ    { List($1) }
+  | LIST typ    { List($2) }
   | VOID    { Void }
   | RECORD ID { RecordType($2) }
   | typ ID LPAREN opts_list RPAREN { FunkType($2, $4, $1) }
@@ -108,7 +108,6 @@ expr:
   | expr LEQ expr       { Binop ($1, Leq, $3)  }
   | expr GT expr        { Binop ($1, Greater, $3)  }
   | expr GEQ expr       { Binop ($1, Geq, $3)  }
-  | expr LT expr        { Binop ($1, Less, $3)  }
   /* logical */
   | expr AND expr       { Binop ($1, And, $3)   }
   | expr OR expr        { Binop ($1, Or, $3)    }
@@ -117,8 +116,8 @@ expr:
   | LPAREN expr RPAREN       { $2                    }
   /* list */
   | LBRACK expr_list RBRACK { ListLit(List.rev $2)  }
-  | expr LBRACK expr RBRACK { ListAccess($1, $2) }
-  | expr DOT ID { RecordAccess($1, $2) }
+  | expr LBRACK expr RBRACK { ListAccess($1, $3) }
+  | expr DOT ID { RecordAccess($1, $3) }
   /* record instantiation */
   | ID LBRACE actuals_list RBRACE { RecordCreate($1,$3) }
   /* mutation */
