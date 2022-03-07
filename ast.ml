@@ -51,6 +51,8 @@ type stmt =
   | While of expr * stmt
   | RecordDef of id * opt list
   | Return of expr
+  | Continue
+  | Break
 
 type fdecl = {
   id: id;

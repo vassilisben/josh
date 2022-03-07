@@ -83,6 +83,8 @@ stmt:
   | RECORD ID LBRACE opts_list RBRACE { RecordDef($2, $4) }
   | RETURN SEMI { Return Noexpr }
   | RETURN expr SEMI { Return $2 }
+  | CONTINUE SEMI { Continue }
+  | BREAK SEMI    { Break }
 
 expr_list:
     /* nothing */   { [] }
