@@ -26,7 +26,7 @@ type expr =
   | Binop of expr * bop * expr
   | Unop of uop * expr
   | Assign of string * expr
-  | RecordCreate of id * actual list
+  | RecordCreate of actual list
   | RecordAccess of expr * id
   | MutateRecord of (expr * id) * expr
   | ListLit of expr list
@@ -105,7 +105,6 @@ let string_of_vdecl = function
 
 let string_of_opt = function
     | Opt(t, id) -> string_of_typ t ^ " " ^ id
-    | _ -> "Expected Opt, got something else"
 let string_of_opt_list l = String.concat ", " (List.map string_of_opt l)
 
 let string_of_fdecl f =
