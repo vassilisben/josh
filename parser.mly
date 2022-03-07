@@ -54,7 +54,7 @@ typ:
   | STRING  { String }
   | LIST typ    { List($2) }
   | VOID    { Void }
-  | RECORD ID { RecordType($2) }
+  | ID { RecordType($1) }
   | typ ID LPAREN opts_list RPAREN { FunkType($2, $4, $1) }
       /*
       record Thing {
@@ -81,7 +81,8 @@ stmt:
   | FOR LPAREN ID IN expr RPAREN stmt { For ($3, $5, $7) }
   | WHILE LPAREN expr RPAREN stmt               { While ($3,$5)   }
   | RECORD ID LBRACE opts_list RBRACE { RecordDef($2, $4) }
-  | RETURN expr { Return $2 }
+  | RETURN SEMI { Return Noexpr }
+  | RETURN expr SEMI { Return $2 }
 
 expr_list:
     /* nothing */   { [] }

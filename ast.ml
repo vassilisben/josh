@@ -17,6 +17,7 @@ type typ =
 and opt = Opt of typ * id
 
 type expr =
+  | Noexpr
   | IntLit of int
   | BoolLit of bool
   | FloatLit of float
