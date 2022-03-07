@@ -1,6 +1,11 @@
 ---
 title: "Josh Reference Manual"
-author: "Bora Elci, Burcu Cetin, Angel Garcia, Vasilis Benopoulos, Gregory Schare"
+author:
+- Bora Elci
+- Burcu Cetin
+- Angel Garcia
+- Vasilis Benopoulos
+- Gregory Schare
 indent: false
 mainfont: Georgia
 monofont: Cascadia Mono Regular ExtraLight
@@ -645,6 +650,18 @@ stmt:
 ```
 
 # Expressions
+# Parenthesized expressions
+Expressions can be parenthesized to specify associativity.
+
+Example:
+`(a + 5)`
+
+Grammar:
+```
+expr:
+  LPAREN expr RPAREN  { $2 }
+```
+
 ## Literals
 Literal values of primitive types are expressions. See section on Literals.
 
@@ -734,13 +751,141 @@ expr:
 
 ## List expressions
 ### Creation
+Lists are not quite literals, but the creation of a list is an expression which
+can be assigned to a variable with list type.
+
+Example:
+`[1, 2, 3]`, `[]`, `["a", "b", "c"]`
+
+Grammar:
+```
+expr:
+  LBRACK expr_list RBRACK { ListLit(List.rev $2)  }
+expr_list:
+  /* nothing */   { [] }
+  | expr_list COMMA expr { $3::$1 }
+```
+
 ### Access
+List elements can also be accessed by index.
+
+Example:
+```
+myList[0]
+```
+
+Grammar:
+```
+expr:
+  expr LBRACK expr RBRACK { ListAccess($1, $3) }
+```
+
 ### Mutation
+List elements can be modified using similar syntax to assignment.
+
+Example:
+```
+myList[0] = 'a'
+```
+
+Grammar:
+```
+expr:
+  expr LBRACK expr RBRACK ASSIGN expr { MutateList(($1,$3), $6) }
+```
+
 ## Record expressions
 ### Creation
+Like lists, records can be instantiated and assigned to a variable or used like
+literals.
+
+Example:
+```
+Person{"Josh", 21}
+```
+
+Grammar:
+```
+expr:
+  ID LBRACE actuals_list RBRACE { RecordCreate($1, $3) }
+
+/* for instantiating records and calling functions */
+actuals_list:
+    /* nothing */ { [] }
+    | actuals_list COMMA actual { $3::$1 }
+
+actual:
+    expr { Actual $1 }
+```
+
 ### Access
+Record fields can also be accessed using the identifier for that field.
+
+Example:
+```
+josh.name
+```
+
+Grammar:
+```
+expr:
+  expr DOT ID { RecordAccess($1, $3) }
+```
+
 ### Mutation
+Record fields can be modified using similar syntax to assignment.
+
+Example:
+```
+dread_pirate_roberts.name = "Wesley"
+```
+
+Grammar:
+```
+expr:
+  expr DOT ID ASSIGN expr { MutateRecord(($1,$3), $5) }
+```
+
 ## Function calls
+You can call a function using its identifier.
+
+Example:
+```
+myFunc(arg1, arg2)
+```
+
+Grammar:
+```
+expr:
+  ID LPAREN actuals_list RPAREN { Call($1, $3) }
+```
+
+You can call a function stored in a list.
+
+Example:
+
+```
+listOfFunctions[3](arg1, arg2)
+```
+
+Grammar:
+```
+expr:
+  expr LBRACK expr RBRACK LPAREN actuals_list RPAREN { CallList(($1,$3), $6) }
+```
+
+You can call a function stored in a record.
+
+Example:  
+```
+node.cmp(other_node)
+```
+
+Grammar:
+```
+expr:
+  expr DOT ID LPAREN actuals_list RPAREN { CallRecord(($1,$3), $5) }
+```
 
 # Declarations
 ## Variable declarations
@@ -774,21 +919,26 @@ int main(string args) {
 Grammar:
 ```
 fdecl:
-    typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE { { id=$2; params=$4; body=$7; return_type=$1 } }
+    typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE
+    { { id=$2; params=$4; body=$7; return_type=$1 } }
 ```
 
-# Memory
 
 # Standard Library
-Josh's functionality is extended through standard library functions. Users are
-able to run bash scripts using the `bash` function, which takes as an input the
-desired script as a string. The output of the command will be returned as a
-string literal. The command itself will not be parsed. If the user wants to use
-quotes as part of the command, they have to escape the char with `\`
+Josh's functionality is extended through standard library functions.
+
+Many features central to the language are explained here.
+
+## Bash
+Users are able to run bash scripts using the `bash` function, which takes as
+an input the desired script as a string. The output of the command will be
+returned as a string literal. The command itself will not be parsed. If the
+user wants to use quotes as part of the command, they have to escape the char
+with `\`
 
 Example:
 ```
-String ret = bash(“man -f ls > out.txt | grep -n legacy”)
+string ret = bash("man -f ls > out.txt | grep -n legacy")
 ```
 
 Should the execution of the script fail, the Josh program will continue to run.
@@ -798,28 +948,56 @@ rm, and open. These can be called like regular functions in josh.
 
 Example:
 ```
-String ret = cat(“out.txt”)
+string ret = cat("out.txt")
 ```
 
-Within the standard library, we also implement functions for the comparison of
-strings and lists.
+## List and string operations
+There are standard library functions for common operations like comparison,
+concatenation, mapping, searching, and more in lists and strings. Some examples
+can be found below.
 
+### Comparison
 Example:
 ```
-list int myList = [1, 2, 3];
-list float myList2 = [1, 2, 3, 4];
+[int] myList = [1, 2, 3];
+[float] myList2 = [1, 2, 3, 4];
 if (equals(myList, myList2)) (echo(“They are equal!”));
 ```
 
-## Conversions
-## String operations
-## List operations
+### Concatenation
 Example:
 ```
 concat([1, 2, 3], [4, 5, 6]);    {| result: [1, 2, 3, 4, 5, 6] |}
+strcat("abc", "123");            {| result: "abc123" |}
 ```
-## Bash
+
+## Conversions
+The standard library implements functions for converting between major data
+types where it makes sense.
+
+Example:
+```
+int myInt = 5;
+string myGoodString = "3.14159";
+string myBadString = "hello";
+
+int_to_string(5)              {| "5"     |}
+string_to_int(myGoodString)   {| 3.14159 |}
+string_to_int(myBadString)    {| ERROR   |}
+```
+
 ## I/O
+See section on Bash. All input and output is done through standard library
+functions which either mimic GNU commands or directly interface with them.
+
+Example:
+```
+string text_of_file = cat("myfile.txt");
+string all_lowercase = toLower(text_of_file);
+bash("echo ", all_lowercase, " > myfile.txt");
+```
+
+There are many ways to achieve the same result.
 
 # Appendix
 ## Scanner
@@ -972,7 +1150,8 @@ stmt_list:
     | stmt stmt_list  { $1::$2 }
 
 fdecl:
-    typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE { { id=$2; params=$4; body=$7; return_type=$1 } }
+    typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE
+    { { id=$2; params=$4; body=$7; return_type=$1 } }
 
 stmt:
   expr SEMI                                          { Expr $1         }
@@ -1057,10 +1236,8 @@ actual:
     expr { Actual $1 }
 ```
 
-## AST (work in progress)
-
 # References
-Rusty LRM
-C LRM
+C Reference Manual: <https://www.bell-labs.com/usr/dmr/www/cman.pdf>
 
-
+Rusty Language Reference Manual:
+<http://www.cs.columbia.edu/~sedwards/classes/2016/4115-fall/lrms/rusty.pdf>
