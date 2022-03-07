@@ -99,15 +99,27 @@ let string_of_typ = function
   | Bool -> "bool"
   | _ -> "add more stuff"
 
-let string_of_vdecl (t, id) = string_of_typ t ^ " " ^ id ^ ";\n"
+let string_of_vdecl = function
+  | Declare(t, id) -> string_of_typ t ^ " " ^ id ^ ";\n"
+  | Initialize(t, id, expr) -> string_of_typ t ^ " " ^ id ^ " = " ^ string_of_expr expr ^ ";\n"
 
+let string_of_opt = function
+    | Opt(t, id) -> string_of_typ t ^ " " ^ id
+    | _ -> "Expected Opt, got something else"
+let string_of_opt_list l = String.concat ", " (List.map string_of_opt l)
+
+let string_of_fdecl f =
+    string_of_typ f.return_type ^ " " ^
+    f.id ^ "(" ^
+    string_of_opt_list f.params ^ ")" ^
+    String.concat "\n" (List.map string_of_stmt f.body)
 
 let string_of_program decls =
     let stringify = function
       | Stmt(t) -> string_of_stmt t
       | Expr(t) -> string_of_expr t
-      | Vdecl(t) -> "hi" (*string_of_vdecl t*)
-      | Fdecl(t) -> "yes im a funk"
+      | Vdecl(t) -> string_of_vdecl t
+      | Fdecl(t) -> string_of_fdecl t
     in
   "\n\nParsed program: \n\n" ^
   String.concat "" (List.map stringify decls) ^
