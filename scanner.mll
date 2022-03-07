@@ -54,7 +54,6 @@ rule token = parse
   | "string" { STRING }
   | "void"   { VOID }
   | "char"   { CHAR }
-  | "list"   { LIST }
   | "true"   { TRUE }
   | "false"  { FALSE }
   | "record" { RECORD }

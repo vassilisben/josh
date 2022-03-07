@@ -8,7 +8,7 @@ open Ast
 %token PLUS MINUS ASSIGN MULT DIV MOD
 %token EQ NEQ LT GT LEQ GEQ AND OR NOT
 %token IF ELSE FOR IN WHILE BREAK CONTINUE RETURN
-%token INT BOOL FLOAT STRING VOID CHAR LIST
+%token INT BOOL FLOAT STRING VOID CHAR
 %token RECORD
 %token <int> INTLIT
 %token <char> CHARLIT
@@ -52,7 +52,7 @@ typ:
   | FLOAT   { Float }
   | CHAR    { Char }
   | STRING  { String }
-  | LIST typ    { ListT($2) }
+  | LBRACK typ RBRACK { ListT($2) }
   | VOID    { Void }
   | ID { RecordType($1) }
   | typ ID LPAREN opts_list RPAREN { FunkType($2, $4, $1) }

@@ -72,7 +72,7 @@ let rec string_of_typ = function
   | String -> "string"
   | Char -> "char"
   | RecordType(t) -> "record " ^ t
-  | ListT(t) -> "list " ^ string_of_typ t
+  | ListT(t) -> "[" ^ string_of_typ t ^ "]"
   | _ -> "add more stuff"
 
 let string_of_op = function
