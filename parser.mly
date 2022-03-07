@@ -122,7 +122,7 @@ expr:
   | expr LBRACK expr RBRACK { ListAccess($1, $3) }
   | expr DOT ID { RecordAccess($1, $3) }
   /* record instantiation */
-  | ID LBRACE actuals_list RBRACE { RecordCreate($1,$3) }
+  | LBRACE actuals_list RBRACE { RecordCreate($1,$3) }
   /* mutation */
   | expr DOT ID ASSIGN expr { MutateRecord(($1,$3), $5) }
   | expr LBRACK expr RBRACK ASSIGN expr { MutateList(($1,$3), $6) }
