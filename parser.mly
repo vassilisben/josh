@@ -43,7 +43,7 @@ top_level_list:
   | top_level top_level_list { $1::$2 }
 
 top_level:
-  | stmt { Stmt $1 }
+    stmt { Stmt $1 }
   | fdecl { Fdecl $1 }
 
 typ:
@@ -52,7 +52,7 @@ typ:
   | FLOAT   { Float }
   | CHAR    { Char }
   | STRING  { String }
-  | LIST typ    { List($2) }
+  | LIST typ    { ListT($2) }
   | VOID    { Void }
   | ID { RecordType($1) }
   | typ ID LPAREN opts_list RPAREN { FunkType($2, $4, $1) }
@@ -90,7 +90,7 @@ expr_list:
 
 expr:
   /* literals */
-  | BOOLLIT                      { BoolLit $1  }
+   BOOLLIT                      { BoolLit $1  }
   | INTLIT                       { IntLit $1   }
   | FLOATLIT                     { FloatLit $1 }
   | CHARLIT                      { CharLit $1  }
@@ -132,16 +132,17 @@ expr:
   | expr LBRACK expr RBRACK LPAREN actuals_list RPAREN { CallList(($1,$3), $6) }
 
 vdecl:
-  | typ ID { Declare($1, $2) }
+    typ ID { Declare($1, $2) }
   | typ ID ASSIGN expr { Initialize($1, $2, $4)}
 
 /* for record field and function argument lists */
-opts_list:
-    /* nothing */   { [] }
-    | opts_list COMMA opt { $3::$1 }
+opts:
+    typ ID  { [Opt($1,$2)] }
+    | opts COMMA typ ID { Opt($3,$4) :: $1 }
 
-opt:
-    typ ID { Opt($1,$2) }
+opts_list:
+    /* nothing */ { [] }
+  | opts { List.rev $1 }
 
 /* for instantiating records and calling functions */
 actuals_list:

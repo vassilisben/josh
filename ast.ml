@@ -10,7 +10,7 @@ type typ =
   | Float
   | Char
   | String
-  | List of typ
+  | ListT of typ
   | Void
   | RecordType of id
   | FunkType of id * opt list * typ
@@ -65,12 +65,14 @@ type top_level =
 
 type program = top_level list
 
-let string_of_typ = function
+let rec string_of_typ = function
     Int -> "int"
   | Bool -> "bool"
   | Float -> "float"
   | String -> "string"
   | Char -> "char"
+  | RecordType(t) -> "record " ^ t
+  | ListT(t) -> "list " ^ string_of_typ t
   | _ -> "add more stuff"
 
 let string_of_op = function
