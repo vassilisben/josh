@@ -132,8 +132,8 @@ expr:
   | expr LBRACK expr RBRACK LPAREN actuals_list RPAREN { CallList(($1,$3), $6) }
 
 vdecl:
-  | typ ID      { Declare($1, $2) }
-  | typ ID ASSIGN expr  { Initialize($1, $2, $4)}
+  | typ ID SEMI      { Declare($1, $2) }
+  | typ ID ASSIGN expr SEMI  { Initialize($1, $2, $4)}
 
 /* for record field and function argument lists */
 opts_list:
