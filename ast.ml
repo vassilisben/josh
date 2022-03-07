@@ -44,6 +44,7 @@ type vdecl =
 type stmt =
   | Block of stmt list
   | Expr of expr
+  | Vdecl of vdecl
   | If of expr * stmt * stmt
   | For of id * expr * stmt
   | While of expr * stmt
@@ -59,11 +60,17 @@ type fdecl = {
 
 type top_level =
   | Stmt of stmt
-  | Vdecl of vdecl
   | Fdecl of fdecl
-  | Expr of expr
 
 type program = top_level list
+
+let string_of_typ = function
+    Int -> "int"
+  | Bool -> "bool"
+  | Float -> "float"
+  | String -> "string"
+  | Char -> "char"
+  | _ -> "add more stuff"
 
 let string_of_op = function
     Add -> "+"
@@ -85,23 +92,19 @@ let rec string_of_expr = function
   | Assign(v, e) -> v ^ " = " ^ string_of_expr e
   | _ -> "add more stuff"
 
+let string_of_vdecl = function
+  | Declare(t, id) -> string_of_typ t ^ " " ^ id ^ ";\n"
+  | Initialize(t, id, expr) -> string_of_typ t ^ " " ^ id ^ " = " ^ string_of_expr expr ^ ";\n"
+
 let rec string_of_stmt = function
     Block(stmts) ->
     "{\n" ^ String.concat "" (List.map string_of_stmt stmts) ^ "}\n"
   | Expr(expr) -> string_of_expr expr ^ ";\n";
+  | Vdecl(decl) -> string_of_vdecl decl
   | If(e, s1, s2) ->  "if (" ^ string_of_expr e ^ ")\n" ^
                       string_of_stmt s1 ^ "else\n" ^ string_of_stmt s2
   | While(e, s) -> "while (" ^ string_of_expr e ^ ") " ^ string_of_stmt s
   | _ -> "add more stuff"
-
-let string_of_typ = function
-    Int -> "int"
-  | Bool -> "bool"
-  | _ -> "add more stuff"
-
-let string_of_vdecl = function
-  | Declare(t, id) -> string_of_typ t ^ " " ^ id ^ ";\n"
-  | Initialize(t, id, expr) -> string_of_typ t ^ " " ^ id ^ " = " ^ string_of_expr expr ^ ";\n"
 
 let string_of_opt = function
     | Opt(t, id) -> string_of_typ t ^ " " ^ id
@@ -116,8 +119,6 @@ let string_of_fdecl f =
 let string_of_program decls =
     let stringify = function
       | Stmt(t) -> string_of_stmt t
-      | Expr(t) -> string_of_expr t
-      | Vdecl(t) -> string_of_vdecl t
       | Fdecl(t) -> string_of_fdecl t
     in
   "\n\nParsed program: \n\n" ^

@@ -44,9 +44,7 @@ top_level_list:
 
 top_level:
   | stmt { Stmt $1 }
-  | vdecl { Vdecl $1 }
   | fdecl { Fdecl $1 }
-  | expr  { Expr $1 }
 
 typ:
   INT       { Int  }
@@ -77,6 +75,7 @@ fdecl:
 
 stmt:
   expr SEMI                                          { Expr $1         }
+  | vdecl SEMI                                       { Vdecl $1 }
   | LBRACE stmt_list RBRACE                          { Block $2        }
   | IF LPAREN expr RPAREN stmt ELSE stmt   { If ($3, $5, $7) }
   | FOR LPAREN ID IN expr RPAREN stmt { For ($3, $5, $7) }
@@ -132,8 +131,8 @@ expr:
   | expr LBRACK expr RBRACK LPAREN actuals_list RPAREN { CallList(($1,$3), $6) }
 
 vdecl:
-  | typ ID SEMI      { Declare($1, $2) }
-  | typ ID ASSIGN expr SEMI  { Initialize($1, $2, $4)}
+  | typ ID { Declare($1, $2) }
+  | typ ID ASSIGN expr { Initialize($1, $2, $4)}
 
 /* for record field and function argument lists */
 opts_list:
