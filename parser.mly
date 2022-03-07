@@ -78,6 +78,7 @@ stmt:
   | vdecl SEMI                                       { Vdecl $1 }
   | LBRACE stmt_list RBRACE                          { Block $2        }
   | IF LPAREN expr RPAREN stmt ELSE stmt   { If ($3, $5, $7) }
+  | IF LPAREN expr RPAREN stmt             { If ($3, $5, Expr(Noexpr)) }
   | FOR LPAREN ID IN expr RPAREN stmt { For ($3, $5, $7) }
   | WHILE LPAREN expr RPAREN stmt               { While ($3,$5)   }
   | RECORD ID LBRACE opts_list RBRACE { RecordDef($2, $4) }
@@ -124,7 +125,7 @@ expr:
   | expr LBRACK expr RBRACK { ListAccess($1, $3) }
   | expr DOT ID { RecordAccess($1, $3) }
   /* record instantiation */
-  | LBRACE actuals_list RBRACE { RecordCreate($2) }
+  | ID LBRACE actuals_list RBRACE { RecordCreate($1, $3) }
   /* mutation */
   | expr DOT ID ASSIGN expr { MutateRecord(($1,$3), $5) }
   | expr LBRACK expr RBRACK ASSIGN expr { MutateList(($1,$3), $6) }

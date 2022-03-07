@@ -27,7 +27,7 @@ type expr =
   | Binop of expr * bop * expr
   | Unop of uop * expr
   | Assign of string * expr
-  | RecordCreate of actual list
+  | RecordCreate of id * actual list
   | RecordAccess of expr * id
   | MutateRecord of (expr * id) * expr
   | ListLit of expr list
