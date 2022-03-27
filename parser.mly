@@ -93,7 +93,11 @@ stmt:
 
 expr_list:
     /* nothing */   { [] }
-    | expr_list COMMA expr { $3::$1 }
+    | args { $1 }
+
+args:
+  expr { [$1] }
+  | expr COMMA args { $1::$3 }
 
 expr:
   /* literals */
