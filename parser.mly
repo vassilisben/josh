@@ -162,7 +162,7 @@ actuals_list:
 
 actuals_args:
   actual { [$1] }
-  | actual COMMA actuals_list { $1::$3 }
+  | actual COMMA actuals_args { $1::$3 }
 
 
 actual:
