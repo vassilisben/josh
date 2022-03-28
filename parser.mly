@@ -58,7 +58,7 @@ typ:
   | STRING  { String }
   | LBRACK typ RBRACK { ListT($2) }
   | VOID    { Void }
-  | ID { RecordType($1) }
+  | RECORD ID { RecordType($2) }
   | typ ID LPAREN opts_list RPAREN { FunkType($2, $4, $1) }
       /*
       record Thing {
@@ -158,7 +158,12 @@ opts_list:
 /* for instantiating records and calling functions */
 actuals_list:
     /* nothing */ { [] }
-    | actuals_list COMMA actual { $3::$1 }
+    | actuals_args { $1 }
+
+actuals_args:
+  actual { [$1] }
+  | actual COMMA actuals_list { $1::$3 }
+
 
 actual:
     expr { Actual $1 }
