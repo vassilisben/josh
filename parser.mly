@@ -59,7 +59,7 @@ typ:
   | LBRACK typ RBRACK { ListT($2) }
   | VOID    { Void }
   | RECORD ID { RecordType($2) }
-  | typ ID LPAREN opts_list RPAREN { FunkType($2, $4, $1) }
+  | typ LPAREN typs_list RPAREN { FunkType($3, $1) }
       /*
       record Thing {
           string name;
@@ -155,6 +155,15 @@ opts_list:
     /* nothing */ { [] }
   | opts { List.rev $1 }
 
+/* for function types */
+typs:
+    typ { [$1] }
+    | typs COMMA typ { $3 :: $1 }
+
+typs_list:
+    /* nothing */ { [] }
+  | typs { List.rev $1 }
+
 /* for instantiating records and calling functions */
 actuals_list:
     /* nothing */ { [] }
@@ -166,4 +175,4 @@ actuals_args:
 
 
 actual:
-    expr { Actual $1 }
+    expr { $1 }
