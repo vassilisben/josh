@@ -85,7 +85,7 @@ stmt:
   | IF LPAREN expr RPAREN stmt %prec NOELSE        { If ($3, $5, Block([])) }
   | FOR LPAREN ID IN expr RPAREN stmt { For ($3, $5, $7) }
   | WHILE LPAREN expr RPAREN stmt               { While ($3,$5)   }
-  | RECORD ID LBRACE opts_list RBRACE { RecordDef($2, $4) }
+  | RECORD ID LBRACE opts_list RBRACE SEMI { RecordDef($2, $4) }
   | RETURN SEMI { Return Noexpr }
   | RETURN expr SEMI { Return $2 }
   | CONTINUE SEMI { Continue }
