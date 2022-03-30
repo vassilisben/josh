@@ -74,7 +74,7 @@ let rec string_of_typ = function
   | String -> "string"
   | Char -> "char"
   | Void -> "void"
-  | EmptyList -> "[]"
+  | EmptyList -> "EmptyList"
   | RecordType(t) -> "record " ^ t
   | ListT(t) -> string_of_typ t
   | FunkType(types, return_typ) ->
