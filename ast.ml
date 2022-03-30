@@ -74,7 +74,7 @@ let rec string_of_typ = function
   | Char -> "char"
   | Void -> "void"
   | RecordType(t) -> "record " ^ t
-  | ListT(t) -> "[" ^ string_of_typ t ^ "]"
+  | ListT(t) -> string_of_typ t
   | FunkType(types, return_typ) ->
     string_of_typ return_typ ^ "(" ^ String.concat ", " (List.map string_of_typ types) ^ ")"
 and string_of_opt = function

@@ -110,7 +110,7 @@ let check decls =
     (* Raise an exception if the given rvalue type cannot be assigned to
        the given lvalue type *)
     let check_assign lvaluet rvaluet err =
-      if lvaluet = rvaluet then lvaluet else raise (Failure err)
+      if string_of_typ lvaluet = string_of_typ rvaluet then lvaluet else raise (Failure err)
     in
 
     (* Return a semantically-checked expression, i.e., with a type *)
@@ -237,8 +237,8 @@ let check decls =
         (match t1 with
             ListT(t) when it = Int ->
                 let (t2, e2') = check_expr env e2 in
-                if t1 != t2 then
-                  raise (Failure ("list of type " ^ string_of_typ t1 ^
+                if t != t2 then
+                  raise (Failure ("list of type " ^ string_of_typ t ^
                                   " cannot be assigned to type " ^
                                   string_of_typ t2 ^ " in " ^ string_of_expr ex))
                 else (t2, SMutateList(((t1, e1'), (it, i')), (t2, e2')))
