@@ -110,7 +110,7 @@ let check decls =
     (* Raise an exception if the given rvalue type cannot be assigned to
        the given lvalue type *)
     let check_assign lvaluet rvaluet err =
-      if string_of_typ lvaluet = string_of_typ rvaluet then lvaluet else raise (Failure err)
+      if (string_of_typ lvaluet = string_of_typ rvaluet) || (rvaluet = EmptyList)  then lvaluet else raise (Failure err)
     in
 
     (* Return a semantically-checked expression, i.e., with a type *)
@@ -217,7 +217,8 @@ let check decls =
                                     string_of_typ t ^ ", " ^ string_of_typ t'
                                     ^ " in " ^ string_of_expr ex)))
             actuals []
-        in (fst (List.hd sactuals), SListLit(sactuals))
+        in if List.length sactuals > 0 then (fst (List.hd sactuals), SListLit(sactuals))
+		else (EmptyList, SNoexpr)
       | ListAccess(e1, e2) as ex ->
         let (t2, e2') = check_expr env e2 in
         let (t1, e1') = check_expr env e1 in

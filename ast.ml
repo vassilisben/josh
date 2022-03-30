@@ -12,6 +12,7 @@ type typ =
   | String
   | ListT of typ
   | Void
+  | EmptyList
   | RecordType of id
   | FunkType of typ list * typ
 and opt = Opt of typ * id
@@ -73,6 +74,7 @@ let rec string_of_typ = function
   | String -> "string"
   | Char -> "char"
   | Void -> "void"
+  | EmptyList -> "[]"
   | RecordType(t) -> "record " ^ t
   | ListT(t) -> string_of_typ t
   | FunkType(types, return_typ) ->
