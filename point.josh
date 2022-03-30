@@ -2,12 +2,14 @@ record P { float x, float y };
 float x_cor(record P p) { return p.x; }
 float y_cor(record P p) { return p.y; }
 
+float sqrt(float a) {}
 float mag(record P p) { return sqrt(p.x*p.x + p.y*p.y); }
+string float_to_string(float a) {}
 
 int main() {
     record P p;
     p.x = 3.0;
     p.y = 5.5;
-    echo(int_to_string(mag(p)));
+    echo(float_to_string(mag(p)));
     return 0;
 }
