@@ -54,10 +54,10 @@ type stmt =
   | Break
 
 type fdecl = {
-  id: id;
-  params: opt list;
+  rtyp: typ;
+  fname: id;
+  formals: opt list;
   body: stmt list;
-  return_type: typ;
 }
 
 type top_level =
@@ -147,9 +147,9 @@ let rec string_of_stmt = function
   | Break -> "break;"
 
 let string_of_fdecl f =
-    string_of_typ f.return_type ^ " " ^
-    f.id ^ "(" ^
-    string_of_opt_list f.params ^ ") {\n  " ^
+    string_of_typ f.rtyp ^ " " ^
+    f.fname ^ "(" ^
+    string_of_opt_list f.formals ^ ") {\n  " ^
     String.concat "\n  " (List.map string_of_stmt f.body)
     ^ "\n}"
 
