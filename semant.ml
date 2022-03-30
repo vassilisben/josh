@@ -110,7 +110,8 @@ let check decls =
     (* Raise an exception if the given rvalue type cannot be assigned to
        the given lvalue type *)
     let check_assign lvaluet rvaluet err =
-      if (string_of_typ lvaluet = string_of_typ rvaluet) || (rvaluet = EmptyList)  then lvaluet else raise (Failure err)
+      if (string_of_typ lvaluet = string_of_typ rvaluet) || (rvaluet = EmptyList) 
+	then lvaluet else raise (Failure err)
     in
 
     (* Return a semantically-checked expression, i.e., with a type *)
