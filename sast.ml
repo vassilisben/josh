@@ -1,7 +1,7 @@
 open Ast
 
 type sexpr = typ * sx
-type sx =
+and sx =
   | SNoexpr
   | SIntLit of int
   | SBoolLit of bool
@@ -23,8 +23,8 @@ type sx =
   | SCallList of (sexpr * sexpr) * sexpr list
 
 type svdecl =
-  | Declare of typ * id
-  | Initialize of typ * id * sexpr
+  | SDeclare of typ * id
+  | SInitialize of typ * id * sexpr
 
 type sstmt =
   | SBlock of sstmt list
@@ -39,10 +39,10 @@ type sstmt =
   | SBreak
 
 type sfdecl = {
-  id: id;
-  params: opt list;
+  rtyp: typ;
+  fname: id;
+  formals: opt list;
   body: sstmt list;
-  return_type: typ;
 }
 
 type stop_level =
@@ -64,7 +64,7 @@ let rec string_of_sexpr (t, e) =
   | SNoexpr -> ""
   | SFloatLit(l) -> string_of_float l
   | SCharLit(l) -> "'" ^ Char.escaped l ^ "'"
-  | SSStrLit(l) -> "\"" ^ String.escaped l ^ "\""
+  | SStrLit(l) -> "\"" ^ String.escaped l ^ "\""
   | SRecordCreate(rec_name, actuals) ->
     rec_name ^ " { " ^ String.concat ", " (List.map string_of_sexpr actuals) ^ " }"
   | SRecordAccess(r, field) -> string_of_sexpr r ^ "." ^ field
@@ -85,15 +85,15 @@ let string_of_svdecl = function
   | SDeclare(t, id) -> string_of_typ t ^ " " ^ id ^ ";"
   | SInitialize(t, id, sexpr) -> string_of_typ t ^ " " ^ id ^ " = " ^ string_of_sexpr sexpr ^ ";"
 
-let rec string_of_stmt = function
+let rec string_of_sstmt = function
     SBlock(stmts) ->
-    "{\n" ^ String.concat "" (List.map string_of_stmt stmts) ^ "}\n"
+    "{\n" ^ String.concat "" (List.map string_of_sstmt stmts) ^ "}\n"
   | SExpr(expr) -> string_of_sexpr expr ^ ";";
   | SVdecl(decl) -> string_of_svdecl decl
   | SIf(e, s1, s2) ->  "if (" ^ string_of_sexpr e ^ ")\n" ^
-                      string_of_stmt s1 ^ "else\n" ^ string_of_stmt s2
-  | SFor(i, iter, stmt) -> "for (" ^ i ^ " in " ^ string_of_sexpr iter ^ ") " ^ string_of_stmt stmt
-  | SWhile(e, s) -> "while (" ^ string_of_sexpr e ^ ") " ^ string_of_stmt s
+                      string_of_sstmt s1 ^ "else\n" ^ string_of_sstmt s2
+  | SFor(i, iter, stmt) -> "for (" ^ i ^ " in " ^ string_of_sexpr iter ^ ") " ^ string_of_sstmt stmt
+  | SWhile(e, s) -> "while (" ^ string_of_sexpr e ^ ") " ^ string_of_sstmt s
   | SRecordDef(rec_name, formals) ->
     "record " ^ rec_name ^ " {\n  " ^ String.concat ",\n  " (List.map string_of_opt formals) ^ "\n};"
   | SReturn(e) -> "return " ^ string_of_sexpr e ^ ";"
@@ -113,5 +113,5 @@ let string_of_sprogram sdecls =
       | SFdecl(t) -> string_of_sfdecl t
     in
   "\n\nParsed program: \n\n" ^
-  String.concat "\n\n" (List.map stringify decls) ^
+  String.concat "\n\n" (List.map stringify sdecls) ^
   "\n"
