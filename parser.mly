@@ -75,7 +75,7 @@ stmt_list:
     | stmt stmt_list  { $1::$2 }
 
 fdecl:
-    typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE { { id=$2; params=$4; body=$7; return_type=$1 } }
+    typ ID LPAREN opts_list RPAREN LBRACE stmt_list RBRACE { { rtyp=$1; fname=$2; formals=$4; body=$7 } }
 
 stmt:
   expr SEMI                                          { Expr $1         }
