@@ -26,7 +26,6 @@ open Ast
 %nonassoc ELSE
 %right ASSIGN
 %left LBRACK
-%left DOT
 %right NOT
 %left OR
 %left AND
@@ -36,7 +35,7 @@ open Ast
 %left MOD
 %left MULT DIV
 %left PLUS MINUS
-
+%left DOT
 %%
 
 program:
@@ -129,7 +128,7 @@ expr:
   | ID ASSIGN expr           { Assign ($1, $3)       }
   | LPAREN expr RPAREN       { $2                    }
   /* list */
-  | LBRACK expr_list RBRACK { ListLit(List.rev $2)  }
+  | LBRACK expr_list RBRACK { ListLit($2)  }
   | expr LBRACK expr RBRACK { ListAccess($1, $3) }
   | expr DOT ID { RecordAccess($1, $3) }
   /* record instantiation */
