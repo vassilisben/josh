@@ -26,17 +26,17 @@ let check decls =
     let check_binds (formals: opt list) =
         let rec dups = function
             [] -> ()
-          | ((_,n1) :: (_,n2) :: _) when n1 = n2 ->
+          | (Opt(_,n1) :: Opt(_,n2) :: _) when n1 = n2 ->
                   raise (Failure ("duplicate parameter " ^ n1))
           | _ :: t -> dups t
-        in dups (List.sort (fun (_,a) (_,b) -> compare a b) formals)
+        in dups (List.sort (fun (Opt(_,a)) (Opt(_,b)) -> compare a b) formals)
     in
 
     let built_in_decls =
         StringMap.add "echo" {
             rtyp = Void;
             fname = "echo";
-            params = [Opt(String, "s")];
+            formals = [Opt(String, "s")];
             body = []; } StringMap.empty
     in
 
@@ -55,11 +55,11 @@ let check decls =
     in
 
     let add_rec map rd =
-      let built_in_err = "record " ^ fst rd ^ " may not be defined"
-      and dup_err = "duplicate record " ^ fst rd
+      let n = fst rd in
+      let built_in_err = "record " ^ n ^ " may not be defined"
+      and dup_err = "duplicate record " ^ n
       and make_err er = raise (Failure er)
-      and n = fst rd (* Name of the record *)
-      in match fd with
+      in match rd with
         _ when StringMap.mem n built_in_recs -> make_err built_in_err
       | _ when StringMap.mem n map -> make_err dup_err
       | _ ->  StringMap.add n rd map
@@ -69,11 +69,15 @@ let check decls =
     in
 
     (* Find all the function definitions in the program. *)
-    let functions = List.filter (function Fdecl _ -> true | _ -> false) decls
+    let functions = List.filter_map
+                    (function Fdecl f -> Some f | _ -> None)
+                    decls
     in
 
     (* Find all top-level record definitions in the program. *)
-    let recs = List.filter (function Stmt (RecordDef _) -> true | _ -> false) decls
+    let recs = List.filter_map
+               (function Stmt (RecordDef(r, f)) -> Some (r, f) | _ -> None)
+               decls
     in
 
     (* Collect all function names into one symbol table *)
@@ -90,7 +94,7 @@ let check decls =
       with Not_found -> raise (Failure ("unrecognized function " ^ s))
     in
 
-    let _ = find_func "main" in (* Ensure "main" is defined *)
+    (* let _ = find_func "main" in (* Ensure "main" is defined *) *)
 
     let find_rec s =
       try StringMap.find s rec_defs
@@ -114,14 +118,15 @@ let check decls =
         Noexpr -> (Void, SNoexpr)
       | IntLit l -> (Int, SIntLit l)
       | BoolLit l -> (Bool, SBoolLit l)
-      | FloatLit l -> (Float, FloatLit l)
-      | StrLit l -> (String, StrLit l)
+      | FloatLit l -> (Float, SFloatLit l)
+      | CharLit l -> (Char, SCharLit l)
+      | StrLit l -> (String, SStrLit l)
       | Id var -> (type_of_identifier env var, SId var)
       | Binop(e1, op, e2) as e ->
         let (t1, e1') = check_expr env e1
         and (t2, e2') = check_expr env e2 in
         let err = "illegal binary operator " ^
-                  string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
+                  string_of_typ t1 ^ " " ^ string_of_bop op ^ " " ^
                   string_of_typ t2 ^ " in " ^ string_of_expr e
         in
         (* All binary operators require operands of the same type*)
@@ -141,7 +146,7 @@ let check decls =
         else raise (Failure err)
       | Unop(op, e) as ex ->
         let (t, e') = check_expr env e in
-        let err = "illegal unary operator " ^ string_of_op op ^
+        let err = "illegal unary operator " ^ string_of_uop op ^
                   string_of_typ t ^ " in " ^ string_of_expr ex
         in
         let t' = match op with
@@ -157,13 +162,13 @@ let check decls =
         in
         (check_assign lt rt err, SAssign(var, (rt, e')))
       | RecordCreate(rt, actuals) as ex ->
-        let rd = find_rec rt in
-        let formals_length = List.length rd.formals
+        let (_, formals) = find_rec rt in
+        let formals_length = List.length formals in
         if List.length actuals != formals_length then
             raise (Failure ("expecting " ^ string_of_int formals_length ^
                             "fields in " ^ string_of_expr ex))
         else
-        let fts = List.map (fun Opt(t,_) -> t) rd.formals in
+        let fts = List.map (fun (Opt(t,_)) -> t) formals in
         let sactuals = List.map (check_expr env) actuals in
         if List.map fst sactuals <> fts then
             raise (Failure ("field types do not match in " ^ string_of_expr ex))
@@ -171,22 +176,22 @@ let check decls =
         else (RecordType(rt), SRecordCreate(rt, sactuals))
       | RecordAccess(e, field) as ex ->
         let (t, e') = check_expr env e in
-        match t with
-          RecordType(rt) ->
-              let rd = find_rec rt in
-              let Opt(_,ft) = try List.find (fun Opt(_,i) -> i = field) rd.formals
+        (match t with
+            RecordType(rt) ->
+              let (_, formals) = find_rec rt in
+              let Opt(ft,_) = try List.find (fun (Opt(_,i)) -> i = field) formals
                   with Not_found -> raise (Failure ("field " ^ field ^
                                            " not a member of record " ^ rt ^
                                            " in " ^ string_of_expr ex))
               in (ft, SRecordAccess((t, e'), field))
-        | _ -> raise (Failure ("expected RecordType in " ^ string_of_expr ex))
+          | _ -> raise (Failure ("expected RecordType in " ^ string_of_expr ex)))
         (* TODO: better error message for above *)
       | MutateRecord((e1, field), e2) as ex ->
         let (t1, e1') = check_expr env e1 in
-        match t1 with
-          RecordType(rt) ->
-              let rd = find_rec rt in
-              let Opt(_,ft) = try List.find (fun Opt(_,i) -> i = field) rd.formals
+        (match t1 with
+            RecordType(rt) ->
+              let (_, formals) = find_rec rt in
+              let Opt(ft,_) = try List.find (fun (Opt(_,i)) -> i = field) formals
                   with Not_found -> raise (Failure ("field " ^ field ^
                                            " not a member of record " ^ rt ^
                                            " in " ^ string_of_expr ex))
@@ -197,7 +202,7 @@ let check decls =
                                   " but got type " ^ string_of_typ t2 ^
                                   " in " ^ string_of_expr ex))
               else (ft, SMutateRecord(((t1, e1'), field), (t2, e2')))
-        | _ -> raise (Failure ("expected RecordType in " ^ string_of_expr ex))
+          | _ -> raise (Failure ("expected RecordType in " ^ string_of_expr ex)))
         (* TODO: better error message for above *)
       | ListLit(actuals) as ex ->
         let sactuals =
@@ -209,42 +214,42 @@ let check decls =
                   | (t',_)::_ when t = t' -> (t,e')::acc
                   | (t',_)::_ ->
                     raise (Failure ("non-matching list element types " ^
-                                    string_of_typ t ^ ", " ^ string_of_type t'
+                                    string_of_typ t ^ ", " ^ string_of_typ t'
                                     ^ " in " ^ string_of_expr ex)))
-            [] actuals
-        in SListLit(sactuals)
+            actuals []
+        in (fst (List.hd sactuals), SListLit(sactuals))
       | ListAccess(e1, e2) as ex ->
         let (t2, e2') = check_expr env e2 in
         let (t1, e1') = check_expr env e1 in
-        match (t1, t2) with
-            (ListT(t), Int) -> (t, SListAccess((t1, e1'), (t2, e2')))
-          | (t, _) ->
-                  raise (Failure ("list expression found " ^
-                                  string_of_typ t ^ ", expected ListT in "
-                                  ^ string_of_expr ex))
-          | (ListT(_), t) ->
+        (match t1 with
+            ListT(t) when t2 = Int -> (t, SListAccess((t1, e1'), (t2, e2')))
+          | ListT(t) ->
                   raise (Failure ("list index found " ^
                                   string_of_typ t ^ ", expected Int in "
                                   ^ string_of_expr ex))
+          | t ->
+                  raise (Failure ("list expression found " ^
+                                  string_of_typ t ^ ", expected ListT in "
+                                  ^ string_of_expr ex)))
       | MutateList((e1, i), e2) as ex ->
         let (it, i') = check_expr env i in
         let (t1, e1') = check_expr env e1 in
-        match (t1, it) with
-            (ListT(t), Int) ->
+        (match t1 with
+            ListT(t) when it = Int ->
                 let (t2, e2') = check_expr env e2 in
                 if t1 != t2 then
                   raise (Failure ("list of type " ^ string_of_typ t1 ^
                                   " cannot be assigned to type " ^
                                   string_of_typ t2 ^ " in " ^ string_of_expr ex))
                 else (t2, SMutateList(((t1, e1'), (it, i')), (t2, e2')))
-          | (t, _) ->
-                  raise (Failure ("list expression found " ^
-                                  string_of_typ t ^ ", expected ListT in "
-                                  ^ string_of_expr ex))
-          | (ListT(_), t) ->
+          | ListT(t) ->
                   raise (Failure ("list index found " ^
                                   string_of_typ t ^ ", expected Int in "
                                   ^ string_of_expr ex))
+          | t ->
+                  raise (Failure ("list expression found " ^
+                                  string_of_typ t ^ ", expected ListT in "
+                                  ^ string_of_expr ex)))
       | Call(fname, args) as call ->
         let fd = find_func fname in
         let param_length = List.length fd.formals in
@@ -252,12 +257,12 @@ let check decls =
           raise (Failure ("expecting " ^ string_of_int param_length ^
                           " arguments in " ^ string_of_expr call))
         else let check_call (ft, _) e =
-               let (et, e') = check_expr e in
+               let (et, e') = check_expr env e in
                let err = "illegal argument found " ^ string_of_typ et ^
                          " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e
                in (check_assign ft et err, e')
           in
-          let args' = List.map2 check_call fd.formals args
+          let args' = List.map2 check_call (List.map (fun (Opt(a,b)) -> (a,b)) fd.formals) args
           in (fd.rtyp, SCall(fname, args'))
           (* TODO *)
       | CallRecord((e, field), args) -> raise (Failure "not implemented")
@@ -283,10 +288,11 @@ let check decls =
           let (rt, e') = check_expr env e
           in
           let err = "illegal initialization " ^ string_of_typ lt ^ " = " ^
-                    string_of_typ rt ^ " in " ^ string_of_expr ex
+                    string_of_typ rt ^ " in " ^ string_of_vdecl ex
           in
-          check_assign lt rt err;
+          ignore (check_assign lt rt err);
           SInitialize(lt, v, (rt, e'))
+    in
 
     let rec check_stmt_list env = function
         [] -> []
@@ -310,11 +316,15 @@ let check decls =
         SWhile(check_bool_expr env e, check_stmt env st)
       | RecordDef(i, formals) -> SRecordDef(i, formals)
       | Return e ->
+        (* TODO: throw error if you try to return while not inside a function *)
+        let rtyp = try StringMap.find "__rtyp__" env
+           with Not_found -> raise (Failure ("return outside function"))
+        in
         let (t, e') = check_expr env e in
-        if t = func.rtyp then SReturn (t, e')
+        if t = rtyp then SReturn (t, e')
         else raise (
             Failure ("return gives " ^ string_of_typ t ^ " expected " ^
-                     string_of_typ func.rtyp ^ " in " ^ string_of_expr e))
+                     string_of_typ rtyp ^ " in " ^ string_of_expr e))
       | Continue -> SContinue
       | Break -> SBreak
     in
@@ -324,27 +334,27 @@ let check decls =
       check_binds func.formals;
 
       (* Build local symbol table of variables for this function *)
-      let env' = List.fold_left (fun m (ty, name) -> StringMap.add name ty m)
-          env func.formals
+      let env' = List.fold_left (fun m (Opt(ty, name)) -> StringMap.add name ty m)
+          env ((Opt(func.rtyp, "__rtyp__"))::func.formals)
       in
 
-      Fdecl ({
-        rtyp = func.rtyp;
-        fname = func.fname;
-        formals = func.formals;
-        body = check_stmt_list env' func.body
+      SFdecl ({
+        srtyp = func.rtyp;
+        sfname = func.fname;
+        sformals = func.formals;
+        sbody = check_stmt_list env' func.body
       })
     (* End of check_func *)
     in
 
     let stmts =
-        List.map (fun (Stmt s) -> s)
-        (List.filter (function Stmt _ -> true | _ -> false)
-         decls)
+        List.filter_map
+        (function Stmt s -> Some s | _ -> None)
+         decls
     in
 
     let env = globals
     in
     (List.map (check_func env) functions)
     @
-    (List.map SStmt (check_stmt_list env stmts))
+    (List.map (fun s -> SStmt(s)) (check_stmt_list env stmts))

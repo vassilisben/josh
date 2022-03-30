@@ -39,10 +39,10 @@ type sstmt =
   | SBreak
 
 type sfdecl = {
-  rtyp: typ;
-  fname: id;
-  formals: opt list;
-  body: sstmt list;
+  srtyp: typ;
+  sfname: id;
+  sformals: opt list;
+  sbody: sstmt list;
 }
 
 type stop_level =
@@ -101,10 +101,10 @@ let rec string_of_sstmt = function
   | SBreak -> "break;"
 
 let string_of_sfdecl f =
-    string_of_typ f.return_type ^ " " ^
-    f.id ^ "(" ^
-    string_of_opt_list f.params ^ ") {\n  " ^
-    String.concat "\n  " (List.map string_of_sstmt f.body)
+    string_of_typ f.srtyp ^ " " ^
+    f.sfname ^ "(" ^
+    string_of_opt_list f.sformals ^ ") {\n  " ^
+    String.concat "\n  " (List.map string_of_sstmt f.sbody)
     ^ "\n}"
 
 let string_of_sprogram sdecls =
