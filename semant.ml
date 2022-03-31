@@ -218,7 +218,7 @@ let check decls =
                                     string_of_typ t ^ ", " ^ string_of_typ t'
                                     ^ " in " ^ string_of_expr ex)))
             actuals []
-        in if List.length sactuals > 0 then (fst (List.hd sactuals), SListLit(sactuals))
+        in if List.length sactuals > 0 then (ListT(fst (List.hd sactuals)), SListLit(sactuals))
 		else (EmptyList, SNoexpr)
       | ListAccess(e1, e2) as ex ->
         let (t2, e2') = check_expr env e2 in
