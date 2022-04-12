@@ -1,0 +1,7 @@
+; ModuleID = 'Josh'
+source_filename = "Josh"
+
+define void @some_function() {
+entry:
+  ret i32 0
+}
