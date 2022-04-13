@@ -36,7 +36,7 @@ let check decls =
         StringMap.add "echo" {
             rtyp = Void;
             fname = "echo";
-            formals = [Opt(String, "s")];
+            formals = [Opt(Int, "n")];
             body = []; } StringMap.empty
     in
 
