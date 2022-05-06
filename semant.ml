@@ -32,12 +32,20 @@ let check decls =
         in dups (List.sort (fun (Opt(_,a)) (Opt(_,b)) -> compare a b) formals)
     in
 
+
     let built_in_decls =
-        StringMap.add "echo" {
-            rtyp = Void;
-            fname = "echo";
-            formals = [Opt(Int, "n")];
-            body = []; } StringMap.empty
+      let add_decl map (fname, formals, rtyp) = 
+        StringMap.add fname {
+          rtyp = rtyp;
+          fname = fname;
+          formals = formals;
+          body = []
+        } map
+      in
+      List.fold_left add_decl StringMap.empty [
+        ("echoi", [Opt(Int, "i")], Void);
+        ("echo", [Opt(String, "s")], Void)
+      ]
     in
 
     let built_in_recs = StringMap.empty

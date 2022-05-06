@@ -10,13 +10,14 @@ let translate decls =
   let josh_module = L.create_module context "Josh" in
 
   (* types *)
-  let i32_t      = L.i32_type    context
-  and i8_t       = L.i8_type     context
-  and i1_t       = L.i1_type     context 
-  and float_type = L.float_type  context
-  and void_type = L.void_type context
-  and array_type = (L.array_type)
-  and struct_type = (L.struct_type context) in
+  let i32_t       = L.i32_type    context
+  and i8_t        = L.i8_type     context
+  and i1_t        = L.i1_type     context 
+  and float_type  = L.float_type  context
+  and void_type   = L.void_type context
+  and string_type = L.pointer_type (L.i8_type context)
+  and array_type  = (L.array_type)
+  and record_type = (L.struct_type context) in
 
   let ltype_of_typ = function
       A.Int   -> i32_t
@@ -24,8 +25,9 @@ let translate decls =
     | A.Char  -> i8_t
     | A.Float -> float_type
     | A.Void -> void_type
-    (*| A.RecordType r -> struct_type 
-    | A.ListT l -> array_type*)
+    | A.String -> string_type
+    (*| A.RecordType _ -> struct_type *)
+    (*| A.ListT l -> array_type*)
   in
 
   (* Get all functions declarations in source *)
@@ -64,10 +66,10 @@ let translate decls =
     let (the_function, _) = StringMap.find fdecl.sfname function_decls in
     let builder = L.builder_at_end context (L.entry_block the_function) in
 
-    let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
+    let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder
+    and str_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
 
     let local_vars =
-
       (* create space for each function paramter *)
       let add_formal m (t, n) p =
         L.set_value_name n p;
@@ -103,33 +105,51 @@ let translate decls =
       with Not_found -> StringMap.find n global_vars
     in
 
+    (* Records don't support nested records or functions for now *)
+    (* 
+      records are stored in the stack, not the heap since LLVM doesn't offer that natively. 
+      So we want a pointer to a created record, which L.build_alloca can give us. But how much space do we allocate on the stack?
+      We take each member in the record declaration, find the analogous LLVM type for it, and add it to a list.
+      We then pass that list to LLVM's L.struct_type which will add up the type sizes for us to create our custom record type, 
+      and then we can pass that record type (L.struct_type) to L.build_alloc to give us our pointer to the record
+    *)
+
+    let build_record_ptr sexpr_list = 
+      let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
+      | [] -> lltype_list
+      | hd::tl ->
+          let ((typ,_) : sexpr) = hd in (build_record_ptr_helper ((ltype_of_typ typ)::lltype_list) tl)
+      in (build_record_ptr_helper [] sexpr_list) 
+    in
+
     let rec build_expr builder ((_, e) : sexpr) = match e with
-        SIntLit i -> L.const_int i32_t i 
-      | SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
-      | SId id -> L.build_load (lookup id) id builder
-      | SAssign (s, e) -> let e' = build_expr builder e in
+        SIntLit i                      -> L.const_int i32_t i 
+      | SRecordCreate (id, sexpr_list) -> L.build_alloca (record_type (build_record_ptr sexpr_list)) id builder
+      | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
+      | SStrLit s                      -> L.build_global_stringptr s "tmp" builder
+      | SId id                         -> L.build_load (lookup id) id builder
+      | SAssign (s, e)                 -> let e' = build_expr builder e in
         ignore(L.build_store e' (lookup s) builder); e'
       | SBinop (e1, op, e2) ->
-        let e1' = build_expr builder e1
-        and e2' = build_expr builder e2 in
-        (match op with
-            A.Add -> L.build_add
-          | A.Sub -> L.build_sub
-          | A.Mul -> L.build_mul
-          | A.Div -> L.build_sdiv
-          | A.Mod -> L.build_srem
-          | A.And -> L.build_and
-          | A.Or -> L.build_or
-          | A.Equal -> L.build_icmp L.Icmp.Eq
-          | A.Neq -> L.build_icmp L.Icmp.Ne
-          | A.Less -> L.build_icmp L.Icmp.Slt
-          | A.Leq -> L.build_icmp L.Icmp.Sle
-          | A.Greater -> L.build_icmp L.Icmp.Sgt
-          | A.Geq -> L.build_icmp L.Icmp.Sge
-        ) e1' e2' "tmp" builder
-      | SCall ("echo", [e]) -> 
-        L.build_call printf_func [| int_format_str ; (build_expr builder e) |]
-          "printf" builder
+          let e1' = build_expr builder e1
+          and e2' = build_expr builder e2 in
+          (match op with
+              A.Add     -> L.build_add
+            | A.Sub     -> L.build_sub
+            | A.Mul     -> L.build_mul
+            | A.Div     -> L.build_sdiv
+            | A.Mod     -> L.build_srem
+            | A.And     -> L.build_and
+            | A.Or      -> L.build_or
+            | A.Equal   -> L.build_icmp L.Icmp.Eq
+            | A.Neq     -> L.build_icmp L.Icmp.Ne
+            | A.Less    -> L.build_icmp L.Icmp.Slt
+            | A.Leq     -> L.build_icmp L.Icmp.Sle
+            | A.Greater -> L.build_icmp L.Icmp.Sgt
+            | A.Geq     -> L.build_icmp L.Icmp.Sge
+          ) e1' e2' "tmp" builder
+      | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder e) |] "printf" builder
+      | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder e) |] "printf" builder
       | SCall (f, args) ->
         let (fdef, fdecl) = StringMap.find f function_decls in
         let llargs = List.rev (List.map (build_expr builder) (List.rev args)) in 

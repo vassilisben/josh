@@ -8,7 +8,9 @@ int main() {
 
   c = a + b;
 
-  echo(c);
+  echo("hello, world");
+
+  echoi(c);
 
   return 0;
 }
