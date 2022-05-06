@@ -1,7 +1,7 @@
 record Point {int x, int y};
 
 int main() {
-  record Point point = Point{10, 10}; 
+  record Point point;
 
   int a;
   int b;

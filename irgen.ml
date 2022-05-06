@@ -9,6 +9,9 @@ let translate decls =
   let context = L.global_context() in
   let josh_module = L.create_module context "Josh" in
 
+  let stmts = List.filter_map (function SStmt s -> Some s | _ -> None) decls in
+
+
   (* types *)
   let i32_t       = L.i32_type    context
   and i8_t        = L.i8_type     context
@@ -19,16 +22,16 @@ let translate decls =
   (*and array_type  = (L.array_type)*)
   and record_type = (L.struct_type context) in
 
-  let ltype_of_typ = function
-      A.Int   -> i32_t
-    | A.Bool  -> i1_t
-    | A.Char  -> i8_t
-    | A.Float -> float_type
-    | A.Void -> void_type
-    | A.String -> string_type 
-    (*| A.RecordType _ -> record_type*)
+  let ltype_of_typ typ arr = match typ with
+      A.Int           -> i32_t
+    | A.Bool          -> i1_t
+    | A.Char          -> i8_t
+    | A.Float         -> float_type
+    | A.Void          -> void_type
+    | A.String        -> string_type 
+    | A.RecordType id -> record_type arr
     (*| A.ListT l -> array_type*)
-    | _ -> print_endline "fuck you"
+    | _ -> i32_t
   in
 
   (* Get all functions declarations in source *)
@@ -43,7 +46,7 @@ let translate decls =
 
   let global_vars : L.llvalue StringMap.t =
     let global_var m (t, n) =
-      let init = L.const_int (ltype_of_typ t) 0
+      let init = L.const_int (ltype_of_typ t [||]) 0
       in StringMap.add n (L.define_global n init josh_module) m in
     List.fold_left global_var StringMap.empty globals in
 
@@ -57,8 +60,8 @@ let translate decls =
     let function_decl m fdecl = 
       let name = fdecl.sfname
       and formal_types = 
-        Array.of_list (List.map (fun (t,_) -> ltype_of_typ t) (List.map (fun (A.Opt(t,id)) -> (t,id)) fdecl.sformals))
-      in let ftype = L.function_type (ltype_of_typ fdecl.srtyp) formal_types in
+        Array.of_list (List.map (fun (t,_) -> ltype_of_typ t [||]) (List.map (fun (A.Opt(t,id)) -> (t,id)) fdecl.sformals))
+      in let ftype = L.function_type (ltype_of_typ fdecl.srtyp [||]) formal_types in
       StringMap.add name (L.define_function name ftype josh_module, fdecl) m in
     List.fold_left function_decl StringMap.empty functions in
     
@@ -76,13 +79,13 @@ let translate decls =
         L.set_value_name n p;
 
         (* TODO: expand to support records/lists *)
-        let local = L.build_alloca (ltype_of_typ t) n builder in
+        let local = L.build_alloca (ltype_of_typ t [||]) n builder in
         ignore (L.build_store p local builder);
         StringMap.add n local m
         
       (* create space for each local var declaration *)
       and add_local m (t, n) =
-        let local_var = L.build_alloca (ltype_of_typ t) n builder
+        let local_var = L.build_alloca (ltype_of_typ t [||]) n builder
         in StringMap.add n local_var m
       in
 
@@ -106,23 +109,22 @@ let translate decls =
       with Not_found -> StringMap.find n global_vars
     in
 
-    let build_record_ptr sexpr_list = 
+    let build_record_ltypes_array sexpr_list = 
       let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
       | [] -> lltype_list
       | hd::tl ->
-          let ((typ,_) : sexpr) = hd in (build_record_ptr_helper ((ltype_of_typ typ)::lltype_list) tl)
+          let ((typ,_) : sexpr) = hd in (build_record_ptr_helper ((ltype_of_typ typ [||])::lltype_list) tl) (* no support for nested records yet *)
       in 
 
       let record_types_list = (build_record_ptr_helper [] sexpr_list) in
       let find_ith_type i = (List.nth record_types_list i) in
 
       Array.init (List.length record_types_list) find_ith_type
-
     in
 
     let rec build_expr builder ((_, e) : sexpr) = match e with
         SIntLit i                      -> L.const_int i32_t i 
-      | SRecordCreate (id, sexpr_list) -> L.build_alloca (record_type (build_record_ptr sexpr_list)) id builder
+      | SRecordCreate (id, sexpr_list) -> L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder
       | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
       | SStrLit s                      -> L.build_global_stringptr s "tmp" builder
       | SId id                         -> L.build_load (lookup id) id builder
