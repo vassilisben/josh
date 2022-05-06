@@ -35,7 +35,7 @@ open Ast
 %left MOD
 %left MULT DIV
 %left PLUS MINUS
-%left DOT
+%right DOT
 %%
 
 program:
