@@ -1,4 +1,8 @@
+record Point {int x, int y};
+
 int main() {
+  record Point point = Point{10, 10}; 
+
   int a;
   int b;
   int c;

@@ -16,7 +16,7 @@ let translate decls =
   and float_type  = L.float_type  context
   and void_type   = L.void_type context
   and string_type = L.pointer_type (L.i8_type context)
-  and array_type  = (L.array_type)
+  (*and array_type  = (L.array_type)*)
   and record_type = (L.struct_type context) in
 
   let ltype_of_typ = function
@@ -25,9 +25,10 @@ let translate decls =
     | A.Char  -> i8_t
     | A.Float -> float_type
     | A.Void -> void_type
-    | A.String -> string_type
-    (*| A.RecordType _ -> struct_type *)
+    | A.String -> string_type 
+    (*| A.RecordType _ -> record_type*)
     (*| A.ListT l -> array_type*)
+    | _ -> print_endline "fuck you"
   in
 
   (* Get all functions declarations in source *)
@@ -105,21 +106,18 @@ let translate decls =
       with Not_found -> StringMap.find n global_vars
     in
 
-    (* Records don't support nested records or functions for now *)
-    (* 
-      records are stored in the stack, not the heap since LLVM doesn't offer that natively. 
-      So we want a pointer to a created record, which L.build_alloca can give us. But how much space do we allocate on the stack?
-      We take each member in the record declaration, find the analogous LLVM type for it, and add it to a list.
-      We then pass that list to LLVM's L.struct_type which will add up the type sizes for us to create our custom record type, 
-      and then we can pass that record type (L.struct_type) to L.build_alloc to give us our pointer to the record
-    *)
-
     let build_record_ptr sexpr_list = 
       let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
       | [] -> lltype_list
       | hd::tl ->
           let ((typ,_) : sexpr) = hd in (build_record_ptr_helper ((ltype_of_typ typ)::lltype_list) tl)
-      in (build_record_ptr_helper [] sexpr_list) 
+      in 
+
+      let record_types_list = (build_record_ptr_helper [] sexpr_list) in
+      let find_ith_type i = (List.nth record_types_list i) in
+
+      Array.init (List.length record_types_list) find_ith_type
+
     in
 
     let rec build_expr builder ((_, e) : sexpr) = match e with
