@@ -20,7 +20,7 @@ let check decls =
         * Record access fields are in formals list of record definition.
         * Record access is accessing a record type.
         * Scoping of record declaration.
-        *)
+    *)
 
     (* Check for duplicates. *)
     let check_binds (formals: opt list) =

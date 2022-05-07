@@ -9,16 +9,13 @@ let translate decls =
   let context = L.global_context() in
   let josh_module = L.create_module context "Josh" in
 
-  let stmts = List.filter_map (function SStmt s -> Some s | _ -> None) decls in
-
-
   (* types *)
   let i32_t       = L.i32_type    context
   and i8_t        = L.i8_type     context
   and i1_t        = L.i1_type     context 
   and float_type  = L.float_type  context
   and void_type   = L.void_type context
-  and string_type = L.pointer_type (L.i8_type context)
+  and string_type = L.build_global_stringptr
   (*and array_type  = (L.array_type)*)
   and record_type = (L.struct_type context) in
 
@@ -28,7 +25,7 @@ let translate decls =
     | A.Char          -> i8_t
     | A.Float         -> float_type
     | A.Void          -> void_type
-    | A.String        -> string_type 
+    | A.String        -> L.pointer_type (L.i8_type context)
     | A.RecordType id -> record_type arr
     (*| A.ListT l -> array_type*)
     | _ -> i32_t
@@ -94,8 +91,9 @@ let translate decls =
         List.filter_map 
         (fun stmt -> match stmt with
           | SVdecl svdecl -> (match svdecl with
-            SDeclare (t,id) -> Some (t,id)
-            | _ -> None
+            | SDeclare (t,id) -> Some (t,id)
+            | SInitialize(t, id, _) -> Some(t, id)
+            |_ -> None
           )
           | _ -> None)
         fdecl.sbody in
@@ -108,6 +106,8 @@ let translate decls =
     let lookup n = try StringMap.find n local_vars
       with Not_found -> StringMap.find n global_vars
     in
+
+    let store id e = StringMap.add id e local_vars in
 
     let build_record_ltypes_array sexpr_list = 
       let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
@@ -167,6 +167,11 @@ let translate decls =
         SBlock sl -> List.fold_left build_stmt builder sl
       | SExpr e -> ignore(build_expr builder e); builder
       | SReturn e -> ignore(L.build_ret (build_expr builder e) builder); builder
+      | SVdecl svdecl -> (match svdecl with
+        | SInitialize (lt, v, s) -> 
+          ignore(build_expr builder (lt, SAssign(v, s))); builder 
+        | _ -> builder
+      )
       | _ -> builder
     in
 

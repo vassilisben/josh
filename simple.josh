@@ -1,20 +1,23 @@
 record Point {int x, int y};
 
+int print_burcu(string a, string b) {
+  echo(a);
+  echo(b);
+  return 0;
+}
+
 int main() {
   record Point point;
+  
+  int b = 3;
 
-  int a;
-  int b;
-  int c;
+  echoi(b);
 
-  a = 2;
-  b = 3;
+  string bora = "bora";
 
-  c = a + b;
+  echo(bora);
 
-  echo("hello, world");
-
-  echoi(c);
+  print_burcu("burcu", "bora elci");
 
   return 0;
 }
