@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-void fork_exec(char *command) {
+#include <sys/wait.h>
+
+int fork_exec(char *command) {
 	pid_t pid = fork();
 	if (pid < 0) {
 		perror("invalid system call");
@@ -10,12 +12,6 @@ void fork_exec(char *command) {
 	} else {
 		waitpid(pid, NULL, 0);
 	}
-	return;
+	return 0;
 }
 
-int main() {
-	fork_exec("for((i=1;i<=100;i++))\n"
-		"do\n"
-    "echo $i\n"
-		"done");
-}

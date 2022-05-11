@@ -1,23 +1,5 @@
-record Point {int x, int y};
-
-int print_burcu(string a, string b) {
-  echo(a);
-  echo(b);
-  return 0;
-}
-
 int main() {
-  record Point point;
-  
-  int b = 3;
-
-  echoi(b);
-
-  string bora = "bora";
-
-  echo(bora);
-
-  print_burcu("burcu", "bora elci");
+  bash("say hey girl");
 
   return 0;
 }

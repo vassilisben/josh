@@ -15,7 +15,6 @@ let translate decls =
   and i1_t        = L.i1_type     context 
   and float_type  = L.float_type  context
   and void_type   = L.void_type context
-  and string_type = L.build_global_stringptr
   (*and array_type  = (L.array_type)*)
   and record_type = (L.struct_type context) in
 
@@ -53,7 +52,7 @@ let translate decls =
     L.declare_function "printf" printf_t josh_module in
 
 	let bash_t : L.lltype = 
-		L.function_type i32_t  in
+    L.function_type i32_t [| (L.pointer_type (L.i8_type context)) |] in
 	let bash_func : L.llvalue = 
 		L.declare_function "fork_exec" bash_t josh_module in
 
@@ -112,8 +111,6 @@ let translate decls =
       with Not_found -> StringMap.find n global_vars
     in
 
-    let store id e = StringMap.add id e local_vars in
-
     let build_record_ltypes_array sexpr_list = 
       let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
       | [] -> lltype_list
@@ -155,7 +152,7 @@ let translate decls =
           ) e1' e2' "tmp" builder
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder e) |] "printf" builder
       | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder e) |] "printf" builder
-		 	| SCall ("bash", [e]) -> L.build_call bash_func [| str_format_str ; (build_expr builder e) |] "fork_exec" builder
+		 	| SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder e) |] "fork_exec" builder
       | SCall (f, args) ->
         let (fdef, fdecl) = StringMap.find f function_decls in
         let llargs = List.rev (List.map (build_expr builder) (List.rev args)) in 
@@ -187,8 +184,8 @@ let translate decls =
 
   List.iter build_function_body functions;
 
-	let llmem = L.MemoryBuffer.of_file "mx.bc" in
+	let llmem = L.MemoryBuffer.of_file "liberate_josh.bc" in
   let llm = Llvm_bitreader.parse_bitcode context llmem in
-	ignore(Llvm_linker.link_modules josh_module llm Llvm_linker.Mode.PreserveSource);
+	ignore(Llvm_linker.link_modules' josh_module llm);
   josh_module
 

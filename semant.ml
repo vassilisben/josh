@@ -44,7 +44,8 @@ let check decls =
       in
       List.fold_left add_decl StringMap.empty [
         ("echoi", [Opt(Int, "i")], Void);
-        ("echo", [Opt(String, "s")], Void)
+        ("echo", [Opt(String, "s")], Void);
+        ("bash",  [Opt(String, "cmd")], Int)
       ]
     in
 
