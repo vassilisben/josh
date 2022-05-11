@@ -7,6 +7,8 @@ module StringMap = Map.Make(String)
 let translate decls = 
   (* boilerplate *)
   let context = L.global_context() in
+	let llmem = L.MemoryBuffer.of_file "liberate_josh.bc" in
+  let llm = Llvm_bitreader.parse_bitcode context llmem in
   let josh_module = L.create_module context "Josh" in
 
   (* types *)
@@ -51,6 +53,11 @@ let translate decls =
     L.var_arg_function_type i32_t [| L.pointer_type i8_t |] in
   let printf_func : L.llvalue =
     L.declare_function "printf" printf_t josh_module in
+
+	let bash_t : L.lltype = 
+		L.function_type i32_t  in
+	let bash_func : L.llvalue = 
+		L.declare_function "fork_exec" bash_t josh_module in
 
   (* create llvm function declarations using the function declarations from source *)
   let function_decls : (L.llvalue * sfdecl) StringMap.t =
@@ -150,6 +157,7 @@ let translate decls =
           ) e1' e2' "tmp" builder
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder e) |] "printf" builder
       | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder e) |] "printf" builder
+		 	| SCall ("bash", [e]) -> L.build_call bash_func [| str_format_str ; (build_expr builder e) |] "fork_exec" builder
       | SCall (f, args) ->
         let (fdef, fdecl) = StringMap.find f function_decls in
         let llargs = List.rev (List.map (build_expr builder) (List.rev args)) in 
@@ -180,5 +188,9 @@ let translate decls =
   in
 
   List.iter build_function_body functions;
+
+	let llmem = L.MemoryBuffer.of_file "mx.bc" in
+  let llm = Llvm_bitreader.parse_bitcode context llmem in
+	ignore(Llvm_linker.link_modules josh_module llm Llvm_linker.Mode.PreserveSource);
   josh_module
 
