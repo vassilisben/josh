@@ -7,8 +7,6 @@ module StringMap = Map.Make(String)
 let translate decls = 
   (* boilerplate *)
   let context = L.global_context() in
-	let llmem = L.MemoryBuffer.of_file "liberate_josh.bc" in
-  let llm = Llvm_bitreader.parse_bitcode context llmem in
   let josh_module = L.create_module context "Josh" in
 
   (* types *)
