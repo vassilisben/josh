@@ -9,7 +9,7 @@ The final three were largely based off of the MicroC code shown in class.
 ### Build the Josh compiler
 
 ```
-ocamlbuild -pkgs llvm josh.native
+ocamlbuild -pkgs llvm,llvm.bitreader,llvm.linker josh.native
 ```
 
 ### Run the Josh compiler and generate llvm code
@@ -20,4 +20,10 @@ ocamlbuild -pkgs llvm josh.native
 ### Run the llvm code
 ```
 lli simple.out
+```
+
+-------
+### To build our C library (liberate_josh.bc)
+```
+clang -c -pthread -emit-llvm liberate_josh.c
 ```
