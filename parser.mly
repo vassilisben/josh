@@ -85,8 +85,8 @@ stmt:
   | FOR LPAREN ID IN expr RPAREN stmt { For ($3, $5, $7) }
   | WHILE LPAREN expr RPAREN stmt               { While ($3,$5)   }
   | RECORD ID LBRACE opts_list RBRACE SEMI { RecordDef($2, $4) }
-  | RETURN SEMI { Return Noexpr }
   | RETURN expr SEMI { Return $2 }
+  | RETURN SEMI { Return Noexpr }
   | CONTINUE SEMI { Continue }
   | BREAK SEMI    { Break }
 

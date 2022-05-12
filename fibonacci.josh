@@ -1,0 +1,22 @@
+int fib(int n) {
+  if (n < 0) {
+    echo("invalid input");
+  }
+
+  if (n == 1 or n == 2) {
+    return 1;
+  }
+
+  int a = n - 1;
+  int b = n - 2;
+
+  return fib(a) + fib(b);
+}
+
+
+int main() {
+  echoi(fib(15));
+
+  return 0;
+}
+

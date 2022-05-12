@@ -1,6 +1,13 @@
 int main() {
-  bash("say hey girl");
+  int x = 0;
+  int y = 9;
+
+  if (y < 10) {
+    int x = 14;
+    echoi(x);
+  }
+
+  echoi(x);
 
   return 0;
 }
-
