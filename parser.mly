@@ -7,7 +7,7 @@ open Ast
 %token SEMI LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE COMMA DOT
 %token PLUS MINUS ASSIGN MULT DIV MOD
 %token EQ NEQ LT GT LEQ GEQ AND OR NOT
-%token IF ELSE FOR IN WHILE BREAK CONTINUE RETURN
+%token IF ELSE FOR WHILE BREAK CONTINUE RETURN
 %token INT BOOL FLOAT STRING VOID CHAR
 %token RECORD
 %token <int> INTLIT
@@ -82,8 +82,8 @@ stmt:
   | LBRACE stmt_list RBRACE                          { Block $2        }
   | IF LPAREN expr RPAREN stmt ELSE stmt   { If ($3, $5, $7) }
   | IF LPAREN expr RPAREN stmt %prec NOELSE        { If ($3, $5, Block([])) }
-  | FOR LPAREN ID IN expr RPAREN stmt { For ($3, $5, $7) }
   | WHILE LPAREN expr RPAREN stmt               { While ($3,$5)   }
+  | FOR LPAREN expr SEMI expr SEMI expr RPAREN stmt { For ($3, $5, $7, $9) }
   | RECORD ID LBRACE opts_list RBRACE SEMI { RecordDef($2, $4) }
   | RETURN expr SEMI { Return $2 }
   | RETURN SEMI { Return Noexpr }

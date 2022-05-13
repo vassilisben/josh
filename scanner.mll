@@ -43,7 +43,6 @@ rule token = parse
   | "if"     { IF }
   | "else"   { ELSE }
   | "for"    { FOR }
-  | "in"     { IN }
   | "while"  { WHILE }
   | "break"  { BREAK }
   | "continue" { CONTINUE }

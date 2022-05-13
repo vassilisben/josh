@@ -176,7 +176,8 @@ let translate decls =
 
         ignore(L.build_cond_br bool_val body_bb end_bb while_builder);
         (L.builder_at_end context end_bb, env)
-
+      | SFor (e1, e2, e3, body) -> build_stmt builder env
+           (SBlock [SExpr e1; SWhile (e2, SBlock [body; SExpr e3])])
       | SIf (predicate, then_stmt, else_stmt) ->
         let bool_val = build_expr builder env predicate in
 
