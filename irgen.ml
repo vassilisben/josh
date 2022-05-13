@@ -4,7 +4,19 @@ open Sast
 
 module StringMap = Map.Make(String)
 
-let translate decls =
+(* TODO
+ * records
+ *   pass record inside function (fix formals)
+ * global variables
+ *   make them just global function
+ * lists...
+ * record access
+ * standard library things?
+ * write the report
+ * make the video
+ *)
+
+let translate top_level =
   (* boilerplate *)
   let context = L.global_context() in
   let josh_module = L.create_module context "Josh" in
@@ -33,7 +45,7 @@ let translate decls =
   (* Get all functions declarations in source *)
   let functions = List.filter_map
                   (function SFdecl f -> Some f | _ -> None)
-                  decls
+                  top_level
   in
 
   (* TODO: get top level vdecls *)
@@ -41,17 +53,59 @@ let translate decls =
                                       | SStmt(sstmt) -> (match sstmt with
                                         | SRecordDef(id, opts_list) -> Some (SRecordDef(id, opts_list))
                                         | _ -> None)
-                                      | _ -> None) decls
+                                      | _ -> None) top_level
   in
 
-  let globals = []
+  let rec build_global_expr env ((_, e) : sexpr) = match e with
+      SIntLit i                      -> L.const_int i32_t i
+    | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
+    | SStrLit s                      -> L.const_string context s
+    (*| SId id                         -> build_global_expr env (StringMap.find id env)*)
+    | SBinop (e1, op, e2) ->
+        let e1' = build_global_expr env e1
+        and e2' = build_global_expr env e2 in
+        (match op with
+            A.Add     -> L.const_add
+          | A.Sub     -> L.const_sub
+          | A.Mul     -> L.const_mul
+          | A.Div     -> L.const_sdiv
+          | A.Mod     -> L.const_srem
+          | A.And     -> L.const_and
+          | A.Or      -> L.const_or
+          | A.Equal   -> L.const_icmp L.Icmp.Eq
+          | A.Neq     -> L.const_icmp L.Icmp.Ne
+          | A.Less    -> L.const_icmp L.Icmp.Slt
+          | A.Leq     -> L.const_icmp L.Icmp.Sle
+          | A.Greater -> L.const_icmp L.Icmp.Sgt
+          | A.Geq     -> L.const_icmp L.Icmp.Sge
+        ) e1' e2'
+    | _ -> raise (Failure ("Constant cannot have that type"))
+  in
+
+  let globals = List.filter_map (function
+                                      | SStmt(sstmt) -> (match sstmt with
+                                        | SVdecl s -> Some s
+                                        | _ -> None)
+                                      | _ -> None) top_level
   in
 
   let global_vars : L.llvalue StringMap.t =
-    let global_var m (t, n) =
-      let init = L.const_int (ltype_of_typ t [||]) 0
-      in StringMap.add n (L.define_global n init josh_module) m in
-    List.fold_left global_var StringMap.empty globals in
+    let global_var (m,env) = function
+        | SDeclare (t, id) ->
+          let init = (match t with
+              A.Int -> L.const_int (ltype_of_typ t [||]) 0
+            | A.Bool -> L.const_int (ltype_of_typ t [||]) 0
+            | A.Char -> L.const_int (ltype_of_typ t [||]) 0
+            | A.Float -> L.const_float (ltype_of_typ t [||]) 0.0
+            | A.String -> L.const_string context "")
+          in (StringMap.add id (L.define_global id init josh_module) m,
+              env)
+        | SInitialize (t, id, e) ->
+          let init = build_global_expr env e
+          in (StringMap.add id (L.define_global id init josh_module) m,
+              StringMap.add id init env)
+          in
+    fst (List.fold_left global_var (StringMap.empty,StringMap.empty) globals) in
 
   let printf_t : L.lltype =
     L.var_arg_function_type i32_t [| L.pointer_type i8_t |] in
@@ -81,6 +135,12 @@ let translate decls =
     let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder
     and str_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
 
+    let rec lookup n = function
+        [] -> raise (Failure ("Not found: " ^ n))
+      | (frame::frames) ->
+        try StringMap.find n frame
+        with Not_found -> lookup n frames
+    in
 
     (* create space for each function paramter *)
     let add_formal m (t, n) p =
@@ -105,14 +165,6 @@ let translate decls =
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
         in StringMap.add n local_var m
       in
-
-    (* TODO: FIX *)
-    let rec lookup n = function
-        [] -> raise (Failure ("Not found: " ^ n))
-      | (frame::frames) ->
-        try StringMap.find n frame
-        with Not_found -> lookup n frames
-    in
 
     let build_record_ltypes_array sexpr_list =
       let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
@@ -204,8 +256,8 @@ let translate decls =
 
         let end_bb = L.append_block context "if_end" the_function in
         let build_br_end = L.build_br end_bb in (* partial function *)
-        add_terminal then_builder (*(L.builder_at_end context then_bb)*) build_br_end;
-        add_terminal else_builder (*(L.builder_at_end context else_bb)*) build_br_end;
+        add_terminal then_builder build_br_end;
+        add_terminal else_builder build_br_end;
 
         ignore(L.build_cond_br bool_val then_bb else_bb builder);
         (L.builder_at_end context end_bb, env)
