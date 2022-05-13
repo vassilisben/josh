@@ -169,7 +169,7 @@ let translate decls =
         let bool_val = build_expr while_builder env predicate in
 
         let body_bb = L.append_block context "while_body" the_function in
-        let (builder', (_::env')) = build_stmt (L.builder_at_end context body_bb) (StringMap.empty::env) body in
+        let (builder', _) = build_stmt (L.builder_at_end context body_bb) (StringMap.empty::env) body in
         add_terminal builder' build_br_while;
 
         let end_bb = L.append_block context "while_end" the_function in
@@ -181,14 +181,14 @@ let translate decls =
         let bool_val = build_expr builder env predicate in
 
         let then_bb = L.append_block context "then" the_function in
-        ignore(build_stmt (L.builder_at_end context then_bb) (StringMap.empty::env) then_stmt);
+        let (then_builder,_) = build_stmt (L.builder_at_end context then_bb) (StringMap.empty::env) then_stmt in
         let else_bb = L.append_block context "else" the_function in
-        ignore(build_stmt (L.builder_at_end context else_bb) (StringMap.empty::env) else_stmt);
+        let (else_builder,_) = build_stmt (L.builder_at_end context else_bb) (StringMap.empty::env) else_stmt in
 
         let end_bb = L.append_block context "if_end" the_function in
         let build_br_end = L.build_br end_bb in (* partial function *)
-        add_terminal (L.builder_at_end context then_bb) build_br_end;
-        add_terminal (L.builder_at_end context else_bb) build_br_end;
+        add_terminal then_builder (*(L.builder_at_end context then_bb)*) build_br_end;
+        add_terminal else_builder (*(L.builder_at_end context else_bb)*) build_br_end;
 
         ignore(L.build_cond_br bool_val then_bb else_bb builder);
         (L.builder_at_end context end_bb, env)
