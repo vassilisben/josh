@@ -74,41 +74,32 @@ let translate decls =
     let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder
     and str_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
 
-    let local_vars =
-      (* create space for each function paramter *)
-      let add_formal m (t, n) p =
-        L.set_value_name n p;
 
-        (* TODO: expand to support records/lists *)
-        let local = L.build_alloca (ltype_of_typ t [||]) n builder in
-        ignore (L.build_store p local builder);
-        StringMap.add n local m
-        
-      (* create space for each local var declaration *)
-      and add_local m (t, n) =
-        let local_var = L.build_alloca (ltype_of_typ t [||]) n builder
-        in StringMap.add n local_var m
-      in
+    (* create space for each function paramter *)
+    let add_formal m (t, n) p =
+      L.set_value_name n p;
 
-      (* formals is a map of params to their LLVM allocated space of appropriate size *)
-      let vdecls_in_function = 
-        List.filter_map 
-        (fun stmt -> match stmt with
-          | SVdecl svdecl -> (match svdecl with
-            | SDeclare (t,id) -> Some (t,id)
-            | SInitialize(t, id, _) -> Some(t, id)
-            |_ -> None
-          )
-          | _ -> None)
-        fdecl.sbody in
-
-      let formals = List.fold_left2 add_formal StringMap.empty (List.map (fun (A.Opt(t, id)) -> (t,id)) fdecl.sformals)
-        (Array.to_list (L.params the_function)) in
-      List.fold_left add_local formals vdecls_in_function
+      (* TODO: expand to support records/lists *)
+      let local = L.build_alloca (ltype_of_typ t [||]) n builder in
+      ignore (L.build_store p local builder);
+      StringMap.add n local m
+    in
+    let formals = List.fold_left2 add_formal StringMap.empty (List.map (fun (A.Opt(t, id)) -> (t,id)) fdecl.sformals)
+      (Array.to_list (L.params the_function))
     in
 
-    let lookup n = try StringMap.find n local_vars
-      with Not_found -> StringMap.find n global_vars
+    let add_local m (t, n) =
+      (* create space for each local var declaration *)
+      let local_var = L.build_alloca (ltype_of_typ t [||]) n builder
+      in StringMap.add n local_var m
+    in
+
+    (* TODO: FIX *)
+    let rec lookup n = function
+        [] -> raise (Failure ("Not found: " ^ n))
+      | (frame::frames) ->
+        try StringMap.find n frame
+        with Not_found -> lookup n frames
     in
 
     let build_record_ltypes_array sexpr_list = 
@@ -124,17 +115,17 @@ let translate decls =
       Array.init (List.length record_types_list) find_ith_type
     in
 
-    let rec build_expr builder ((_, e) : sexpr) = match e with
+    let rec build_expr builder ((frame::frames) as env) ((_, e) : sexpr) = match e with
         SIntLit i                      -> L.const_int i32_t i 
       | SRecordCreate (id, sexpr_list) -> L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder
       | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
       | SStrLit s                      -> L.build_global_stringptr s "tmp" builder
-      | SId id                         -> L.build_load (lookup id) id builder
-      | SAssign (s, e)                 -> let e' = build_expr builder e in
-        ignore(L.build_store e' (lookup s) builder); e'
+      | SId id                         -> L.build_load (lookup id env) id builder
+      | SAssign (s, e)                 -> let e' = build_expr builder env e in
+        ignore(L.build_store e' (lookup s env) builder); e'
       | SBinop (e1, op, e2) ->
-          let e1' = build_expr builder e1
-          and e2' = build_expr builder e2 in
+          let e1' = build_expr builder env e1
+          and e2' = build_expr builder env e2 in
           (match op with
               A.Add     -> L.build_add
             | A.Sub     -> L.build_sub
@@ -150,12 +141,12 @@ let translate decls =
             | A.Greater -> L.build_icmp L.Icmp.Sgt
             | A.Geq     -> L.build_icmp L.Icmp.Sge
           ) e1' e2' "tmp" builder
-      | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder e) |] "printf" builder
-      | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder e) |] "printf" builder
-		 	| SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder e) |] "fork_exec" builder
+      | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder env e) |] "printf" builder
+      | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
+      | SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder env e) |] "fork_exec" builder
       | SCall (f, args) ->
         let (fdef, fdecl) = StringMap.find f function_decls in
-        let llargs = List.rev (List.map (build_expr builder) (List.rev args)) in 
+        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in 
         let result = f ^ "_result" in
         L.build_call fdef (Array.of_list llargs) result builder
 
@@ -166,32 +157,33 @@ let translate decls =
         Some _ -> ()
       | None -> ignore (instr builder) in
 
-    let rec build_stmt builder = function
-        SBlock sl -> List.fold_left build_stmt builder sl
-      | SExpr e -> ignore(build_expr builder e); builder
-      | SReturn e -> ignore(L.build_ret (build_expr builder e) builder); builder
+    let rec build_stmt builder ((frame::frames) as env) = function
+        SBlock sl -> List.fold_left (fun (a,b) x -> build_stmt a b x) (builder,env) sl
+      | SExpr e -> ignore(build_expr builder env e); (builder, env)
+      | SReturn e -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env)
       | SWhile (predicate, body) -> 
         let while_bb = L.append_block context "while" the_function in
         let build_br_while = L.build_br while_bb in (* partial function *)
         ignore (build_br_while builder);
         let while_builder = L.builder_at_end context while_bb in
-        let bool_val = build_expr while_builder predicate in
+        let bool_val = build_expr while_builder env predicate in
 
         let body_bb = L.append_block context "while_body" the_function in
-        add_terminal (build_stmt (L.builder_at_end context body_bb) body) build_br_while;
+        let (builder', (_::env')) = build_stmt (L.builder_at_end context body_bb) (StringMap.empty::env) body in
+        add_terminal builder' build_br_while;
 
         let end_bb = L.append_block context "while_end" the_function in
 
         ignore(L.build_cond_br bool_val body_bb end_bb while_builder);
-        L.builder_at_end context end_bb
+        (L.builder_at_end context end_bb, env)
 
       | SIf (predicate, then_stmt, else_stmt) ->
-        let bool_val = build_expr builder predicate in
+        let bool_val = build_expr builder env predicate in
 
         let then_bb = L.append_block context "then" the_function in
-        ignore (build_stmt (L.builder_at_end context then_bb) then_stmt);
+        ignore(build_stmt (L.builder_at_end context then_bb) (StringMap.empty::env) then_stmt);
         let else_bb = L.append_block context "else" the_function in
-        ignore (build_stmt (L.builder_at_end context else_bb) else_stmt);
+        ignore(build_stmt (L.builder_at_end context else_bb) (StringMap.empty::env) else_stmt);
 
         let end_bb = L.append_block context "if_end" the_function in
         let build_br_end = L.build_br end_bb in (* partial function *)
@@ -199,17 +191,22 @@ let translate decls =
         add_terminal (L.builder_at_end context else_bb) build_br_end;
 
         ignore(L.build_cond_br bool_val then_bb else_bb builder);
-        L.builder_at_end context end_bb
+        (L.builder_at_end context end_bb, env)
 
       | SVdecl svdecl -> (match svdecl with
-        | SInitialize (lt, v, s) -> 
-          ignore(build_expr builder (lt, SAssign(v, s))); builder 
-        | _ -> builder
+        | SDeclare(t, id) ->
+            let frame' = add_local frame (t, id) in
+            (builder, frame'::frames)
+        | SInitialize (t, id, expr) ->
+            let frame' = add_local frame (t, id) in
+            ignore(build_expr builder (frame'::frames) (t, SAssign(id, expr)));
+            (builder, frame'::frames)
+        | _ -> (builder,env)
       )
-      | _ -> builder
+      | _ -> (builder,env)
     in
 
-    let func_builder = build_stmt builder (SBlock fdecl.sbody) in
+    let (func_builder, _) = build_stmt builder [formals; global_vars] (SBlock fdecl.sbody) in
     add_terminal func_builder (L.build_ret (L.const_int i32_t 0))
   in
 
