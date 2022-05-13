@@ -146,13 +146,13 @@ vdecl:
   | typ ID ASSIGN expr { Initialize($1, $2, $4)}
 
 /* for record field and function argument lists */
-opts:
-    typ ID  { [Opt($1,$2)] }
-    | opts COMMA typ ID { Opt($3,$4) :: $1 }
-
 opts_list:
     /* nothing */ { [] }
-  | opts { List.rev $1 }
+  | opts { $1 }
+
+opts:
+  typ ID  { [Opt($1,$2)] }
+  | typ ID COMMA opts { Opt($1,$2) :: $4 }
 
 /* for function types */
 typs:

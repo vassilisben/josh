@@ -1,13 +1,9 @@
+record Person { 
+  int age, 
+  int isLegalAge 
+};
+
 int main() {
-  int x = 0;
-  int y = 9;
-
-  if (y < 10) {
-    int x = 14;
-    echoi(x);
-  }
-
-  echoi(x);
-
+  record Person bora;
   return 0;
 }

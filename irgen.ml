@@ -37,6 +37,13 @@ let translate decls =
   in
 
   (* TODO: get top level vdecls *)
+  let record_defs = List.filter_map (function
+                                      | SStmt(sstmt) -> (match sstmt with
+                                        | SRecordDef(id, opts_list) -> Some (SRecordDef(id, opts_list))
+                                        | _ -> None)
+                                      | _ -> None) decls
+  in
+
   let globals = []
   in
 
@@ -84,15 +91,20 @@ let translate decls =
       ignore (L.build_store p local builder);
       StringMap.add n local m
     in
+
     let formals = List.fold_left2 add_formal StringMap.empty (List.map (fun (A.Opt(t, id)) -> (t,id)) fdecl.sformals)
-      (Array.to_list (L.params the_function))
-    in
+        (Array.to_list (L.params the_function)) in
 
     let add_local m (t, n) =
       (* create space for each local var declaration *)
-      let local_var = L.build_alloca (ltype_of_typ t [||]) n builder
-      in StringMap.add n local_var m
-    in
+        let local_var = match t with
+        | A.RecordType id ->
+            let global_type = (L.type_by_name josh_module "Person") in (match global_type with
+              Some t -> L.build_alloca t n builder
+              | None -> raise(Failure("Unrecognized record type")))
+        | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
+        in StringMap.add n local_var m
+      in
 
     (* TODO: FIX *)
     let rec lookup n = function
@@ -117,7 +129,9 @@ let translate decls =
 
     let rec build_expr builder ((frame::frames) as env) ((_, e) : sexpr) = match e with
         SIntLit i                      -> L.const_int i32_t i
-      | SRecordCreate (id, sexpr_list) -> L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder
+      | SRecordCreate (id, sexpr_list) -> let global_type = (L.type_by_name josh_module "Person") in (match global_type with
+                                          Some t -> (L.build_alloca t id builder) (*L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder*)
+                                          | None -> raise(Failure("Unrecognized record type")))
       | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
       | SStrLit s                      -> L.build_global_stringptr s "tmp" builder
       | SId id                         -> L.build_load (lookup id env) id builder
@@ -196,6 +210,7 @@ let translate decls =
         ignore(L.build_cond_br bool_val then_bb else_bb builder);
         (L.builder_at_end context end_bb, env)
 
+
       | SVdecl svdecl -> (match svdecl with
         | SDeclare(t, id) ->
             let frame' = add_local frame (t, id) in
@@ -212,6 +227,23 @@ let translate decls =
     let (func_builder, _) = build_stmt builder [formals; global_vars] (SBlock fdecl.sbody) in
     add_terminal func_builder (L.build_ret (L.const_int i32_t 0))
   in
+
+  let build_record_formals_ltypes_array (opt_list : A.opt list) =
+    let rec aux (opt_list : A.opt list) llopt_list = match opt_list with
+    | [] -> llopt_list
+    | A.Opt(typ, _)::tl -> aux tl ( (ltype_of_typ typ [||])::llopt_list)
+    in
+    let formals_ltypes_list = List.rev (aux opt_list []) in
+    let find_ith_type i = (List.nth formals_ltypes_list i) in
+    Array.init (List.length formals_ltypes_list) find_ith_type
+  in
+
+  List.iter (fun x ->
+        let (SRecordDef(rec_name, formals)) = x in
+        let record = (L.named_struct_type context "Person") in
+        ignore(L.struct_set_body record (build_record_formals_ltypes_array formals) false);
+        ignore(L.declare_global record "Person" josh_module);
+    ) record_defs;
 
   List.iter build_function_body functions;
 
