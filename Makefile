@@ -1,7 +1,7 @@
 .PHONY: default
-default:
-	ocamlbuild -pkgs llvm josh.native
+default: irgen.ml
+	ocamlbuild -pkgs llvm,llvm.bitreader,llvm.linker josh.native
 
 .PHONY: test
-test:
-	./josh.native < simple.josh > simple.out && cat simple.out
+test: default josh.native simple.josh
+	./josh.native < simple.josh > simple.out && lli simple.out

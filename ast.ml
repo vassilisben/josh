@@ -48,7 +48,7 @@ type stmt =
   | Expr of expr
   | Vdecl of vdecl
   | If of expr * stmt * stmt
-  | For of id * expr * stmt
+  | For of expr * expr * expr * stmt
   | While of expr * stmt
   | RecordDef of id * opt list
   | Return of expr
@@ -141,7 +141,7 @@ let rec string_of_stmt = function
   | Vdecl(decl) -> string_of_vdecl decl
   | If(e, s1, s2) ->  "if (" ^ string_of_expr e ^ ")\n" ^
                       string_of_stmt s1 ^ "else\n" ^ string_of_stmt s2
-  | For(i, iter, stmt) -> "for (" ^ i ^ " in " ^ string_of_expr iter ^ ") " ^ string_of_stmt stmt
+  | For(e1, e2, e3, stmt) -> "for (" ^ string_of_expr e1 ^ "; " ^ string_of_expr e2 ^ "; " ^ string_of_expr e3 ^ ") " ^ string_of_stmt stmt
   | While(e, s) -> "while (" ^ string_of_expr e ^ ") " ^ string_of_stmt s
   | RecordDef(rec_name, formals) ->
     "record " ^ rec_name ^ " {\n  " ^ String.concat ",\n  " (List.map string_of_opt formals) ^ "\n};"

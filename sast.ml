@@ -31,7 +31,7 @@ type sstmt =
   | SExpr of sexpr
   | SVdecl of svdecl
   | SIf of sexpr * sstmt * sstmt
-  | SFor of id * sexpr * sstmt
+  | SFor of sexpr * sexpr * sexpr * sstmt
   | SWhile of sexpr * sstmt
   | SRecordDef of id * opt list
   | SReturn of sexpr
@@ -92,7 +92,7 @@ let rec string_of_sstmt = function
   | SVdecl(decl) -> string_of_svdecl decl
   | SIf(e, s1, s2) ->  "if (" ^ string_of_sexpr e ^ ")\n" ^
                       string_of_sstmt s1 ^ "else\n" ^ string_of_sstmt s2
-  | SFor(i, iter, stmt) -> "for (" ^ i ^ " in " ^ string_of_sexpr iter ^ ") " ^ string_of_sstmt stmt
+  | SFor(e1, e2, e3, stmt) -> "for (" ^ string_of_sexpr e1 ^ "; " ^ string_of_sexpr e2 ^ "; " ^ string_of_sexpr e3 ^ ") " ^ string_of_sstmt stmt
   | SWhile(e, s) -> "while (" ^ string_of_sexpr e ^ ") " ^ string_of_sstmt s
   | SRecordDef(rec_name, formals) ->
     "record " ^ rec_name ^ " {\n  " ^ String.concat ",\n  " (List.map string_of_opt formals) ^ "\n};"

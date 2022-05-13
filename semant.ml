@@ -321,8 +321,8 @@ let check decls =
       | Vdecl v -> SVdecl (check_vdecl env v)
       | If(e, st1, st2) ->
         SIf(check_bool_expr env e, check_stmt env st1, check_stmt env st2)
-      | For(i, e, st) ->
-        SFor(i, check_expr env e, check_stmt env st)
+      | For(e1, e2, e3, st) ->
+        SFor(check_expr env e1, check_expr env e2, check_expr env e3, check_stmt env st)
       | While(e, st) ->
         SWhile(check_bool_expr env e, check_stmt env st)
       | RecordDef(i, formals) -> SRecordDef(i, formals)
