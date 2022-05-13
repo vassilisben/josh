@@ -4,7 +4,7 @@ open Sast
 
 module StringMap = Map.Make(String)
 
-let translate decls = 
+let translate decls =
   (* boilerplate *)
   let context = L.global_context() in
   let josh_module = L.create_module context "Josh" in
@@ -12,7 +12,7 @@ let translate decls =
   (* types *)
   let i32_t       = L.i32_type    context
   and i8_t        = L.i8_type     context
-  and i1_t        = L.i1_type     context 
+  and i1_t        = L.i1_type     context
   and float_type  = L.float_type  context
   and void_type   = L.void_type context
   (*and array_type  = (L.array_type)*)
@@ -51,23 +51,23 @@ let translate decls =
   let printf_func : L.llvalue =
     L.declare_function "printf" printf_t josh_module in
 
-	let bash_t : L.lltype = 
+  let bash_t : L.lltype =
     L.function_type i32_t [| (L.pointer_type (L.i8_type context)) |] in
-	let bash_func : L.llvalue = 
-		L.declare_function "fork_exec" bash_t josh_module in
+    let bash_func : L.llvalue =
+        L.declare_function "fork_exec" bash_t josh_module in
 
   (* create llvm function declarations using the function declarations from source *)
   let function_decls : (L.llvalue * sfdecl) StringMap.t =
-    let function_decl m fdecl = 
+    let function_decl m fdecl =
       let name = fdecl.sfname
-      and formal_types = 
+      and formal_types =
         Array.of_list (List.map (fun (t,_) -> ltype_of_typ t [||]) (List.map (fun (A.Opt(t,id)) -> (t,id)) fdecl.sformals))
       in let ftype = L.function_type (ltype_of_typ fdecl.srtyp [||]) formal_types in
       StringMap.add name (L.define_function name ftype josh_module, fdecl) m in
     List.fold_left function_decl StringMap.empty functions in
-    
+
   (* For each llvm function declaration, create the corresponding llvm 3-addr code function body *)
-  let build_function_body fdecl = 
+  let build_function_body fdecl =
     let (the_function, _) = StringMap.find fdecl.sfname function_decls in
     let builder = L.builder_at_end context (L.entry_block the_function) in
 
@@ -102,12 +102,12 @@ let translate decls =
         with Not_found -> lookup n frames
     in
 
-    let build_record_ltypes_array sexpr_list = 
+    let build_record_ltypes_array sexpr_list =
       let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
       | [] -> lltype_list
       | hd::tl ->
           let ((typ,_) : sexpr) = hd in (build_record_ptr_helper ((ltype_of_typ typ [||])::lltype_list) tl) (* no support for nested records yet *)
-      in 
+      in
 
       let record_types_list = (build_record_ptr_helper [] sexpr_list) in
       let find_ith_type i = (List.nth record_types_list i) in
@@ -116,7 +116,7 @@ let translate decls =
     in
 
     let rec build_expr builder ((frame::frames) as env) ((_, e) : sexpr) = match e with
-        SIntLit i                      -> L.const_int i32_t i 
+        SIntLit i                      -> L.const_int i32_t i
       | SRecordCreate (id, sexpr_list) -> L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder
       | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
       | SStrLit s                      -> L.build_global_stringptr s "tmp" builder
@@ -146,13 +146,13 @@ let translate decls =
       | SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder env e) |] "fork_exec" builder
       | SCall (f, args) ->
         let (fdef, fdecl) = StringMap.find f function_decls in
-        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in 
+        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         let result = f ^ "_result" in
         L.build_call fdef (Array.of_list llargs) result builder
 
     in
 
-    let add_terminal builder instr = 
+    let add_terminal builder instr =
       match L.block_terminator (L.insertion_block builder) with
         Some _ -> ()
       | None -> ignore (instr builder) in
@@ -161,7 +161,9 @@ let translate decls =
         SBlock sl -> List.fold_left (fun (a,b) x -> build_stmt a b x) (builder,env) sl
       | SExpr e -> ignore(build_expr builder env e); (builder, env)
       | SReturn e -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env)
-      | SWhile (predicate, body) -> 
+      (*| SContinue -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env) (* TODO *) *)
+      (*| SBreak -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env)  (* TODO *) *)
+      | SWhile (predicate, body) ->
         let while_bb = L.append_block context "while" the_function in
         let build_br_while = L.build_br while_bb in (* partial function *)
         ignore (build_br_while builder);
@@ -213,8 +215,7 @@ let translate decls =
 
   List.iter build_function_body functions;
 
-	let llmem = L.MemoryBuffer.of_file "liberate_josh.bc" in
+  let llmem = L.MemoryBuffer.of_file "liberate_josh.bc" in
   let llm = Llvm_bitreader.parse_bitcode context llmem in
-	ignore(Llvm_linker.link_modules' josh_module llm);
+  ignore(Llvm_linker.link_modules' josh_module llm);
   josh_module
-
