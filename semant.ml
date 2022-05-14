@@ -115,38 +115,50 @@ let check decls =
 
     (* Raise an exception if the given rvalue type cannot be assigned to
        the given lvalue type *)
-    let check_assign lvaluet rvaluet err =
-      if (string_of_typ lvaluet = string_of_typ rvaluet) || (rvaluet = EmptyList) 
+    let check_assign (lvaluet:styp) (rvaluet:styp) err =
+      if (string_of_styp lvaluet = string_of_styp rvaluet) || (rvaluet = SEmptyList) 
 	then lvaluet else raise (Failure err)
     in
 
+
+    let rec styp_of_typ env = function
+      | Int -> SInt
+      | Bool -> SBool
+      | Float -> SFloat
+      | Char -> SChar
+      | String -> SString
+      | ListT(t,e) -> SListT(styp_of_typ env t, check_expr env e)
+      | Void -> SVoid
+      | EmptyList -> SEmptyList
+      | RecordType(id) -> SRecordType(id)
+      | FunkType(opts,ret) -> SFunkType(List.map (styp_of_typ env) opts, styp_of_typ env ret)
     (* Return a semantically-checked expression, i.e., with a type *)
-    let rec check_expr env = function
-        Noexpr -> (Void, SNoexpr)
-      | IntLit l -> (Int, SIntLit l)
-      | BoolLit l -> (Bool, SBoolLit l)
-      | FloatLit l -> (Float, SFloatLit l)
-      | CharLit l -> (Char, SCharLit l)
-      | StrLit l -> (String, SStrLit l)
+    and check_expr env = function
+        Noexpr -> (SVoid, SNoexpr)
+      | IntLit l -> (SInt, SIntLit l)
+      | BoolLit l -> (SBool, SBoolLit l)
+      | FloatLit l -> (SFloat, SFloatLit l)
+      | CharLit l -> (SChar, SCharLit l)
+      | StrLit l -> (SString, SStrLit l)
       | Id var -> (type_of_identifier env var, SId var)
       | Binop(e1, op, e2) as e ->
         let (t1, e1') = check_expr env e1
         and (t2, e2') = check_expr env e2 in
         let err = "illegal binary operator " ^
-                  string_of_typ t1 ^ " " ^ string_of_bop op ^ " " ^
-                  string_of_typ t2 ^ " in " ^ string_of_expr e
+                  string_of_styp t1 ^ " " ^ string_of_bop op ^ " " ^
+                  string_of_styp t2 ^ " in " ^ string_of_expr e
         in
         (* All binary operators require operands of the same type*)
         if t1 = t2 then
           (* Determine expression type based on operator and operand types *)
           let t = match op with
           (* can we add chars, strings, lists, etc? *)
-              Add | Sub | Mul | Div | Mod when t1 = Int -> Int
-            | Add | Sub | Mul | Div when t1 = Float -> Float
-            | Equal | Neq -> Bool
-            | Less | Leq | Greater | Geq when t1 = Int -> Bool
-            | Less | Leq | Greater | Geq when t1 = Float -> Bool
-            | And | Or when t1 = Bool -> Bool
+              Add | Sub | Mul | Div | Mod when t1 = SInt -> SInt
+            | Add | Sub | Mul | Div when t1 = SFloat -> SFloat
+            | Equal | Neq -> SBool
+            | Less | Leq | Greater | Geq when t1 = SInt -> SBool
+            | Less | Leq | Greater | Geq when t1 = SFloat -> SBool
+            | And | Or when t1 = SBool -> SBool
             | _ -> raise (Failure err)
           in
           (t, SBinop((t1, e1'), op, (t2, e2')))
@@ -154,18 +166,18 @@ let check decls =
       | Unop(op, e) as ex ->
         let (t, e') = check_expr env e in
         let err = "illegal unary operator " ^ string_of_uop op ^
-                  string_of_typ t ^ " in " ^ string_of_expr ex
+                  string_of_styp t ^ " in " ^ string_of_expr ex
         in
         let t' = match op with
-            Not when t = Bool -> Bool
+            Not when t = SBool -> SBool
           | _ -> raise (Failure err)
         in
         (t', SUnop(op, (t, e')))
       | Assign(var, e) as ex ->
         let lt = type_of_identifier env var
         and (rt, e') = check_expr env e in
-        let err = "illegal assignment " ^ string_of_typ lt ^ " = " ^
-                  string_of_typ rt ^ " in " ^ string_of_expr ex
+        let err = "illegal assignment " ^ string_of_styp lt ^ " = " ^
+                  string_of_styp rt ^ " in " ^ string_of_expr ex
         in
         (check_assign lt rt err, SAssign(var, (rt, e')))
       | RecordCreate(rt, actuals) as ex ->
@@ -175,28 +187,28 @@ let check decls =
             raise (Failure ("expecting " ^ string_of_int formals_length ^
                             "fields in " ^ string_of_expr ex))
         else
-        let fts = List.map (fun (Opt(t,_)) -> t) formals in
+        let fts = List.map (fun (Opt(t,_)) -> styp_of_typ env t) formals in
         let sactuals = List.map (check_expr env) actuals in
         if List.map fst sactuals <> fts then
             raise (Failure ("field types do not match in " ^ string_of_expr ex))
             (* TODO: better error message for above *)
-        else (RecordType(rt), SRecordCreate(rt, sactuals))
+        else (SRecordType(rt), SRecordCreate(rt, sactuals))
       | RecordAccess(e, field) as ex ->
         let (t, e') = check_expr env e in
         (match t with
-            RecordType(rt) ->
+            SRecordType(rt) ->
               let (_, formals) = find_rec rt in
               let Opt(ft,_) = try List.find (fun (Opt(_,i)) -> i = field) formals
                   with Not_found -> raise (Failure ("field " ^ field ^
                                            " not a member of record " ^ rt ^
                                            " in " ^ string_of_expr ex))
-              in (ft, SRecordAccess((t, e'), field))
+              in (styp_of_typ env ft, SRecordAccess((t, e'), field))
           | _ -> raise (Failure ("expected RecordType in " ^ string_of_expr ex)))
         (* TODO: better error message for above *)
       | MutateRecord((e1, field), e2) as ex ->
         let (t1, e1') = check_expr env e1 in
         (match t1 with
-            RecordType(rt) ->
+            SRecordType(rt) ->
               let (_, formals) = find_rec rt in
               let Opt(ft,_) = try List.find (fun (Opt(_,i)) -> i = field) formals
                   with Not_found -> raise (Failure ("field " ^ field ^
@@ -204,11 +216,11 @@ let check decls =
                                            " in " ^ string_of_expr ex))
               in
               let (t2, e2') = check_expr env e2 in
-              if ft != t2 then
+              if (styp_of_typ env ft) != t2 then
                   raise (Failure ("expected type " ^ string_of_typ ft ^
-                                  " but got type " ^ string_of_typ t2 ^
+                                  " but got type " ^ string_of_styp t2 ^
                                   " in " ^ string_of_expr ex))
-              else (ft, SMutateRecord(((t1, e1'), field), (t2, e2')))
+              else (styp_of_typ env ft, SMutateRecord(((t1, e1'), field), (t2, e2')))
           | _ -> raise (Failure ("expected RecordType in " ^ string_of_expr ex)))
         (* TODO: better error message for above *)
       | ListLit(actuals) as ex ->
@@ -221,47 +233,45 @@ let check decls =
                   | (t',_)::_ when t = t' -> (t,e')::acc
                   | (t',_)::_ ->
                     raise (Failure ("non-matching list element types " ^
-                                    string_of_typ t ^ ", " ^ string_of_typ t'
+                                    string_of_styp t ^ ", " ^ string_of_styp t'
                                     ^ " in " ^ string_of_expr ex)))
             actuals []
         in if List.length sactuals > 0 then
-            (ListT(fst (List.hd sactuals), SIntLit(Int, List.length sactuals)), SListLit(sactuals))
-		else (EmptyList, SNoexpr)
+            (SListT(fst (List.hd sactuals), (SInt, SIntLit(List.length sactuals))), SListLit(sactuals))
+		else (SEmptyList, SNoexpr)
       | ListAccess(e1, e2) as ex ->
         let (t2, e2') = check_expr env e2 in
         let (t1, e1') = check_expr env e1 in
         (match t1 with
-            ListT(t, length) when t2 = Int ->
-                let t1' = ListT(t, check_expr env length) in
-                (t, SListAccess((t1', e1'), (t2, e2')))
-          | ListT(t, _) ->
+            SListT(t, _) when t2 = SInt ->
+                (t, SListAccess((t1, e1'), (t2, e2')))
+          | SListT(t, _) ->
                   raise (Failure ("list index found " ^
-                                  string_of_typ t ^ ", expected Int in "
+                                  string_of_styp t ^ ", expected Int in "
                                   ^ string_of_expr ex))
           | t ->
                   raise (Failure ("list expression found " ^
-                                  string_of_typ t ^ ", expected ListT in "
+                                  string_of_styp t ^ ", expected ListT in "
                                   ^ string_of_expr ex)))
       | MutateList((e1, i), e2) as ex ->
         let (it, i') = check_expr env i in
         let (t1, e1') = check_expr env e1 in
         (match t1 with
-            ListT(t, length) when it = Int ->
+            SListT(t, _) when it = SInt ->
                 let (t2, e2') = check_expr env e2 in
                 if t != t2 then
-                  raise (Failure ("list of type " ^ string_of_typ t ^
+                  raise (Failure ("list of type " ^ string_of_styp t ^
                                   " cannot be assigned to type " ^
-                                  string_of_typ t2 ^ " in " ^ string_of_expr ex))
+                                  string_of_styp t2 ^ " in " ^ string_of_expr ex))
                 else
-                    let t1' = ListT(t, check_expr env length) in
-                    (t2, SMutateList(((t1', e1'), (it, i')), (t2, e2')))
-          | ListT(t, _) ->
+                    (t2, SMutateList(((t1, e1'), (it, i')), (t2, e2')))
+          | SListT(t, _) ->
                   raise (Failure ("list index found " ^
-                                  string_of_typ t ^ ", expected Int in "
+                                  string_of_styp t ^ ", expected Int in "
                                   ^ string_of_expr ex))
           | t ->
                   raise (Failure ("list expression found " ^
-                                  string_of_typ t ^ ", expected ListT in "
+                                  string_of_styp t ^ ", expected ListT in "
                                   ^ string_of_expr ex)))
       | Call(fname, args) as call ->
         let fd = find_func fname in
@@ -271,12 +281,12 @@ let check decls =
                           " arguments in " ^ string_of_expr call))
         else let check_call (ft, _) e =
                let (et, e') = check_expr env e in
-               let err = "illegal argument found " ^ string_of_typ et ^
-                         " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e
+               let err = "illegal argument found " ^ string_of_styp et ^
+                         " expected " ^ string_of_styp ft ^ " in " ^ string_of_expr e
                in (check_assign ft et err, e')
           in
-          let args' = List.map2 check_call (List.map (fun (Opt(a,b)) -> (a,b)) fd.formals) args
-          in (fd.rtyp, SCall(fname, args'))
+          let args' = List.map2 check_call (List.map (fun (Opt(a,b)) -> (styp_of_typ env a,b)) fd.formals) args
+          in (styp_of_typ env fd.rtyp, SCall(fname, args'))
           (* TODO *)
       | CallRecord((e, field), args) -> raise (Failure "not implemented")
       | CallList((e1, e2), args) -> raise (Failure "not implemented")
@@ -285,26 +295,26 @@ let check decls =
     let check_bool_expr env e =
       let (t, e') = check_expr env e in
       match t with
-      | Bool -> (t, e')
+      | SBool -> (t, e')
       |  _ -> raise (Failure ("expected Boolean expression in " ^ string_of_expr e))
     in
 
     let update_env env = function
-        Vdecl(Declare(t, v)) -> StringMap.add v t env
-      | Vdecl(Initialize(t, v, _)) -> StringMap.add v t env
+        Vdecl(Declare(t, v)) -> StringMap.add v (styp_of_typ env t) env
+      | Vdecl(Initialize(t, v, _)) -> StringMap.add v (styp_of_typ env t) env
       | _ -> env
     in
 
     let check_vdecl env = function
-        Declare(t, v) -> SDeclare(t, v)
+        Declare(t, v) -> SDeclare(styp_of_typ env t, v)
       | Initialize(lt, v, e) as ex ->
           let (rt, e') = check_expr env e
           in
           let err = "illegal initialization " ^ string_of_typ lt ^ " = " ^
-                    string_of_typ rt ^ " in " ^ string_of_vdecl ex
+                    string_of_styp rt ^ " in " ^ string_of_vdecl ex
           in
-          ignore (check_assign lt rt err);
-          SInitialize(lt, v, (rt, e'))
+          ignore (check_assign (styp_of_typ env lt) rt err);
+          SInitialize(styp_of_typ env lt, v, (rt, e'))
     in
 
     let rec check_stmt_list env = function
@@ -327,7 +337,7 @@ let check decls =
         SFor(check_expr env e1, check_expr env e2, check_expr env e3, check_stmt env st)
       | While(e, st) ->
         SWhile(check_bool_expr env e, check_stmt env st)
-      | RecordDef(i, formals) -> SRecordDef(i, formals)
+      | RecordDef(i, formals) -> SRecordDef(i, List.map (fun (Opt(a,b)) -> SOpt(styp_of_typ env a,b)) formals)
       | Return e ->
         (* TODO: throw error if you try to return while not inside a function *)
         let rtyp = try StringMap.find "__rtyp__" env
@@ -336,8 +346,8 @@ let check decls =
         let (t, e') = check_expr env e in
         if t = rtyp then SReturn (t, e')
         else raise (
-            Failure ("return gives " ^ string_of_typ t ^ " expected " ^
-                     string_of_typ rtyp ^ " in " ^ string_of_expr e))
+            Failure ("return gives " ^ string_of_styp t ^ " expected " ^
+                     string_of_styp rtyp ^ " in " ^ string_of_expr e))
       | Continue -> SContinue
       | Break -> SBreak
     in
@@ -347,14 +357,14 @@ let check decls =
       check_binds func.formals;
 
       (* Build local symbol table of variables for this function *)
-      let env' = List.fold_left (fun m (Opt(ty, name)) -> StringMap.add name ty m)
+      let env' = List.fold_left (fun m (Opt(ty, name)) -> StringMap.add name (styp_of_typ env ty) m)
           env ((Opt(func.rtyp, "__rtyp__"))::func.formals)
       in
 
       SFdecl ({
-        srtyp = func.rtyp;
+        srtyp = styp_of_typ env func.rtyp;
         sfname = func.fname;
-        sformals = func.formals;
+        sformals = List.map (fun (Opt(a,b)) -> SOpt(styp_of_typ env a,b)) func.formals;
         sbody = check_stmt_list env' func.body
       })
     (* End of check_func *)
@@ -368,14 +378,14 @@ let check decls =
 
     let globals =
         let add_global m = function
-            Declare(t, id) -> StringMap.add id t m
+            Declare(t, id) -> StringMap.add id (styp_of_typ m t) m
           | Initialize(t, id, e) ->
               let (t', e') = check_expr m e in
               let err = "illegal assignment " ^ string_of_typ t ^ " = " ^
-                        string_of_typ t' ^ " in " ^ string_of_expr e
+                        string_of_styp t' ^ " in " ^ string_of_expr e
               in
-              ignore(check_assign t t' err);
-              StringMap.add id t m
+              ignore(check_assign (styp_of_typ m t) t' err);
+              StringMap.add id (styp_of_typ m t) m
         in
         List.fold_left add_global StringMap.empty
         (List.filter_map

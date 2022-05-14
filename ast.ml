@@ -1,4 +1,3 @@
-
 type bop = Add | Sub | Mul | Div | Mod | Equal | Neq | Less | Leq | Greater | Geq | And | Or
 type uop = Not
 
