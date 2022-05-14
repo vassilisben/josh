@@ -37,7 +37,13 @@ let translate top_level =
     | A.Void          -> void_type
     | A.String        -> L.pointer_type (L.i8_type context)
     | A.RecordType id -> record_type arr
-    | A.ListT (ty,_)  -> array_type (ltype_of_typ ty [||]) 0 (* we will malloc later *)
+    | A.ListT (ty,l)  ->
+            (*let e = try (* check if l is a constant expression? *)
+            if is_some e
+            then
+                array_type (ltype_of_typ ty [||]) 0 (* Allocate on stack. *)
+            else*)
+                L.pointer_type (ltype_of_typ ty [||]) (* Allocate on heap. *)
     | _ -> i32_t
   in
 
@@ -145,36 +151,6 @@ let translate top_level =
         with Not_found -> lookup n frames
     in
 
-    (* create space for each function paramter *)
-    let add_formal m (t, n) p =
-      L.set_value_name n p;
-
-      (* TODO: expand to support records/lists *)
-      let local = match t with
-        | (A.RecordType id) as r ->
-            let global_type = (L.type_by_name josh_module "Person") in (match global_type with
-                Some t -> L.build_alloca (ltype_of_typ r (L.struct_element_types t)) n builder
-              | None -> raise(Failure("Unrecognized record type")))
-        | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
-      in
-      ignore (L.build_store p local builder);
-      StringMap.add n local m
-    in
-
-    let formals = List.fold_left2 add_formal StringMap.empty (List.map (fun (A.Opt(t, id)) -> (t,id)) fdecl.sformals)
-        (Array.to_list (L.params the_function)) in
-
-    let add_local m (t, n) =
-      (* create space for each local var declaration *)
-        let local_var = match t with
-        | A.RecordType id ->
-            let global_type = (L.type_by_name josh_module id) in (match global_type with
-              Some t -> L.build_alloca t n builder
-              | None -> raise(Failure("Unrecognized record type")))
-        | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
-        in StringMap.add n local_var m
-      in
-
     let build_record_ltypes_array sexpr_list =
       let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
       | [] -> lltype_list
@@ -186,21 +162,6 @@ let translate top_level =
       let find_ith_type i = (List.nth record_types_list i) in
 
       Array.init (List.length record_types_list) find_ith_type
-    in
-
-    let get_member_index record_name member =
-      let rec aux record_defs_left record_name member = match record_defs_left with
-      | [] -> raise(Failure("Couldn't find record type"))
-      | hd::tl -> let (SRecordDef(rec_name, formals)) = hd in match ("record " ^ rec_name) with
-        | record_name -> let rec formals_aux formals_left index = match formals_left with
-          | [] -> raise(Failure("Couldn't find member"))
-          | hd::tl -> let A.Opt(_,id) = hd in match id with
-            | member -> index
-            | _ -> formals_aux tl (index+1)
-          in formals_aux formals 0
-        | _ -> (aux tl record_name member)
-      in
-      aux record_defs record_name member
     in
 
     let rec build_expr builder ((frame::frames) as env) ((_, e) : sexpr) = match e with
@@ -243,15 +204,15 @@ let translate top_level =
             let n_bytes = L.const_mul (L.const_int i32_t (List.length exprs))
                                       (L.size_of (ltype_of_typ (fst (List.hd exprs)) [||]))
             in
-            let arr = L.build_array_malloc t n_bytes "tmp" builder in
+            let arr_ptr = L.build_array_malloc t n_bytes "tmp" builder in
             fst (List.fold_left
               (fun (agg,idx) e ->
                   (*(L.build_insertvalue agg
                     (build_expr builder env e) idx "tmp" builder,*)
                   (let e' = build_expr builder env e in
-                  let p = L.build_gep agg [|L.const_int i32_t idx; L.const_int i32_t 0|] "tmp" builder in
-                  L.build_store p e' builder,
-                  idx+1)) (arr, 0) exprs)
+                  let arr_ptr' = L.build_gep agg [|L.const_int i32_t idx; L.const_int i32_t 0|] "tmp" builder in
+                  L.build_store e' arr_ptr builder,
+                  idx+1)) (arr_ptr, 0) exprs)
       | SListAccess(e1, e2) ->
             let arr = build_expr builder env e1 in
             let idx = build_expr builder env e2 in
@@ -263,7 +224,7 @@ let translate top_level =
             let idx = build_expr builder env i in
             let value = build_expr builder env e2 in
             let p = L.build_gep arr [|idx; L.const_int i32_t 0|] "tmp" builder in
-            L.build_store p value builder
+            L.build_store value p builder
             (* TODO: list index out of bounds *)
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
@@ -273,6 +234,56 @@ let translate top_level =
         let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         let result = f ^ "_result" in
         L.build_call fdef (Array.of_list llargs) result builder
+
+    and add_local m (t, n) =
+      (* create space for each local var declaration *)
+        let local_var = match t with
+        | A.RecordType id ->
+            let global_type = (L.type_by_name josh_module id) in (match global_type with
+              Some t -> L.build_alloca t n builder
+              | None -> raise(Failure("Unrecognized record type")))
+        | (A.ListT(typ, l)) as lst ->
+            let e = build_expr builder m l in
+            let arr_ptr = L.build_array_malloc (ltype_of_typ typ [||]) e "tmp" builder in
+            arr_ptr
+        | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
+        in StringMap.add n local_var m
+
+    (* create space for each function paramter *)
+    and add_formal m (t, n) p =
+      L.set_value_name n p;
+
+      (* TODO: expand to support records/lists *)
+      let local = match t with
+        | (A.RecordType id) as r ->
+            let global_type = (L.type_by_name josh_module id) in (match global_type with
+                Some t -> L.build_alloca (ltype_of_typ r (L.struct_element_types t)) n builder
+              | None -> raise(Failure("Unrecognized record type")))
+        | (A.ListT(typ, l)) as lst ->
+            let e = build_expr builder m l in
+            let arr_ptr = L.build_array_malloc (ltype_of_typ typ [||]) e "tmp" builder in
+            arr_ptr
+        | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
+      in
+      ignore (L.build_store p local builder);
+      StringMap.add n local m
+
+    and formals = List.fold_left2 add_formal StringMap.empty (List.map (fun (A.Opt(t, id)) -> (t,id)) fdecl.sformals)
+        (Array.to_list (L.params the_function))
+
+    and get_member_index record_name member =
+      let rec aux record_defs_left record_name member = match record_defs_left with
+      | [] -> raise(Failure("Couldn't find record type"))
+      | hd::tl -> let (SRecordDef(rec_name, formals)) = hd in match ("record " ^ rec_name) with
+        | record_name -> let rec formals_aux formals_left index = match formals_left with
+          | [] -> raise(Failure("Couldn't find member"))
+          | hd::tl -> let A.Opt(_,id) = hd in match id with
+            | member -> index
+            | _ -> formals_aux tl (index+1)
+          in formals_aux formals 0
+        | _ -> (aux tl record_name member)
+      in
+      aux record_defs record_name member
 
     in
 
