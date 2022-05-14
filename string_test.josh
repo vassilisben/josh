@@ -1,17 +1,11 @@
-record Person { 
-  int age, 
-  int isLegalAge 
-};
-
 int main() {
 	string a = "aaa";
 	string b = "bbb";
 	string c = concat(b, a);
-	c = subset(c, 0, 3);
 
 	if (strcmp(subset(c, 0, 3), b) == 0) {
-		echo("hahah");
+		echo("I can compare strings now!");
+		bash("curl parrot.live");
 	}
-	echo(c);
 	return 0;
 }

@@ -47,7 +47,6 @@ let translate top_level =
                   (function SFdecl f -> Some f | _ -> None)
                   top_level
   in
-
   (* TODO: get top level vdecls *)
   let record_defs = List.filter_map (function
                                       | SStmt(sstmt) -> (match sstmt with
@@ -106,16 +105,63 @@ let translate top_level =
               StringMap.add id init env)
           in
     fst (List.fold_left global_var (StringMap.empty,StringMap.empty) globals) in
-
+	(****** STANDARD LIBRARY CALLS *******)
   let printf_t : L.lltype =
     L.var_arg_function_type i32_t [| L.pointer_type i8_t |] in
   let printf_func : L.llvalue =
     L.declare_function "printf" printf_t josh_module in
 
   let bash_t : L.lltype =
-    L.function_type i32_t [| (L.pointer_type (L.i8_type context)) |] in
-    let bash_func : L.llvalue =
-        L.declare_function "fork_exec" bash_t josh_module in
+    L.function_type i32_t [| L.pointer_type i8_t |] in
+  let bash_func : L.llvalue =
+    L.declare_function "fork_exec" bash_t josh_module in
+
+  let subset_t : L.lltype =
+    L.function_type (L.pointer_type i8_t) [| L.pointer_type i8_t; i32_t; i32_t |] in
+  let subset_func : L.llvalue =
+    L.declare_function "josh_subset" subset_t josh_module in
+
+  let strcmp_t : L.lltype =
+    L.function_type i32_t [| L.pointer_type i8_t; L.pointer_type i8_t |] in
+  let strcmp_func : L.llvalue =
+    L.declare_function "josh_strcmp" strcmp_t josh_module in
+
+  let concat_t : L.lltype =
+    L.function_type (L.pointer_type i8_t) [| L.pointer_type i8_t; L.pointer_type i8_t |] in
+  let concat_func : L.llvalue =
+    L.declare_function "josh_concat" concat_t josh_module in
+
+	let sqrt_t : L.lltype =
+		L.function_type float_type [| i32_t |] in
+	let sqrt_func : L.llvalue =
+		L.declare_function "josh_sqrt" sqrt_t josh_module in
+
+	let fsqrt_t : L.lltype =
+		L.function_type float_type [| float_type |] in
+	let fsqrt_func : L.llvalue =
+		L.declare_function "josh_sqrt2" fsqrt_t josh_module in
+
+	let pow_t : L.lltype =
+		L.function_type i32_t [| i32_t; i32_t |] in
+	let pow_func : L.llvalue =
+		L.declare_function "josh_pow" pow_t josh_module in
+
+	let fpow_t : L.lltype =
+		L.function_type float_type [| float_type; float_type |] in
+	let fpow_func : L.llvalue =
+		L.declare_function "josh_pow2" fpow_t josh_module in
+
+	let itf_t : L.lltype =
+		L.function_type float_type [| i32_t |] in
+	let itf_func : L.llvalue =
+		L.declare_function "int_to_float" itf_t josh_module in
+
+	let fti_t : L.lltype =
+		L.function_type i32_t [| float_type |] in
+	let fti_func : L.llvalue =
+		L.declare_function "float_to_int" fti_t josh_module in
+
+		(* END OF STANDARD LIBRARY *)
 
   (* create llvm function declarations using the function declarations from source *)
   let function_decls : (L.llvalue * sfdecl) StringMap.t =
@@ -133,7 +179,8 @@ let translate top_level =
     let builder = L.builder_at_end context (L.entry_block the_function) in
 
     let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder
-    and str_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
+    and str_format_str = L.build_global_stringptr "%s\n" "fmt" builder
+		and flt_format_str = L.build_global_stringptr "%f\n" "fmt" builder in
 
     let rec lookup n = function
         [] -> raise (Failure ("Not found: " ^ n))
@@ -181,6 +228,7 @@ let translate top_level =
 
     let rec build_expr builder ((frame::frames) as env) ((_, e) : sexpr) = match e with
         SIntLit i                      -> L.const_int i32_t i
+			| SFloatLit f                    -> L.const_float float_type f 
       | SRecordCreate (id, sexpr_list) -> let global_type = (L.type_by_name josh_module "Person") in (match global_type with
                                           Some t -> (L.build_alloca t id builder) (*L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder*)
                                           | None -> raise(Failure("Unrecognized record type")))
@@ -208,9 +256,29 @@ let translate top_level =
             | A.Geq     -> L.build_icmp L.Icmp.Sge
           ) e1' e2' "tmp" builder
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder env e) |] "printf" builder
-      | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
+      | SCall ("echof", [e]) -> L.build_call printf_func [| flt_format_str ; (build_expr builder env e) |] "printf" builder
+			| SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder env e) |] "fork_exec" builder
-      | SCall (f, args) ->
+			| SCall ("sqrt", [e]) -> L.build_call sqrt_func [| (build_expr builder env e) |] "josh_sqrt" builder
+			| SCall ("fsqrt", [e]) -> L.build_call fsqrt_func [| (build_expr builder env e) |] "josh_sqrt2" builder
+			| SCall ("int_to_float", [e]) -> L.build_call itf_func [| (build_expr builder env e) |] "int_to_float" builder
+			| SCall ("float_to_int", [e]) -> L.build_call fti_func [| (build_expr builder env e) |] "float_to_int" builder
+      | SCall ("pow", args) -> 
+        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
+        L.build_call pow_func (Array.of_list llargs) "josh_pow" builder
+      | SCall ("fpow", args) -> 
+        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
+        L.build_call fpow_func (Array.of_list llargs) "josh_pow2" builder
+      | SCall ("concat", args) -> 
+        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
+        L.build_call concat_func (Array.of_list llargs) "josh_concat" builder
+      | SCall ("subset", args) -> 
+        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
+        L.build_call subset_func (Array.of_list llargs) "josh_subset" builder
+      | SCall ("strcmp", args) -> 
+        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
+        L.build_call strcmp_func (Array.of_list llargs) "josh_strcmp" builder
+			| SCall (f, args) ->
         let (fdef, fdecl) = StringMap.find f function_decls in
         let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         let result = f ^ "_result" in
