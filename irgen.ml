@@ -11,6 +11,7 @@ let translate decls =
 
   (* types *)
   let i32_t       = L.i32_type    context
+  and i64_t       = L.i64_type    context
   and i8_t        = L.i8_type     context
   and i1_t        = L.i1_type     context 
   and float_type  = L.float_type  context
@@ -99,7 +100,7 @@ let translate decls =
       (* create space for each local var declaration *)
         let local_var = match t with
         | A.RecordType id ->
-            let global_type = (L.type_by_name josh_module "Person") in (match global_type with 
+            let global_type = (L.type_by_name josh_module id) in (match global_type with 
               Some t -> L.build_alloca t n builder
               | None -> raise(Failure("Unrecognized record type")))
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
@@ -127,16 +128,37 @@ let translate decls =
       Array.init (List.length record_types_list) find_ith_type
     in
 
-    let rec build_expr builder ((frame::frames) as env) ((_, e) : sexpr) = match e with
-        SIntLit i                      -> L.const_int i32_t i 
-      | SRecordCreate (id, sexpr_list) -> let global_type = (L.type_by_name josh_module "Person") in (match global_type with 
-                                          Some t -> (L.build_alloca t id builder) (*L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder*)
-                                          | None -> raise(Failure("Unrecognized record type")))
+    let get_member_index record_name member =
+      let rec aux record_defs_left record_name member = match record_defs_left with
+      | [] -> raise(Failure("Couldn't find record type"))
+      | hd::tl -> let (SRecordDef(rec_name, formals)) = hd in match ("record " ^ rec_name) with 
+        | record_name -> let rec formals_aux formals_left index = match formals_left with
+          | [] -> raise(Failure("Couldn't find member"))
+          | hd::tl -> let A.Opt(_,id) = hd in match id with 
+            | member -> index
+            | _ -> formals_aux tl (index+1)
+          in formals_aux formals 0
+        | _ -> (aux tl record_name member)
+      in
+      aux record_defs record_name member
+    in
 
-      | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
-      | SStrLit s                      -> L.build_global_stringptr s "tmp" builder
-      | SId id                         -> L.build_load (lookup id env) id builder
-      | SAssign (s, e)                 -> let e' = build_expr builder env e in
+    let rec build_expr builder ((frame::frames) as env) ((_, e) : sexpr) = match e with
+        SIntLit i                         -> L.const_int i32_t i 
+      | SRecordCreate (id, sexpr_list)    -> let global_type = (L.type_by_name josh_module id) in (match global_type with 
+                                               Some t -> (L.build_alloca t id builder) (*L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder*)
+                                               | None -> raise(Failure("Unrecognized record type")))
+      | SMutateRecord(((typ, SId(id)), member), new_value) -> let record_ptr = (lookup id env) in
+                                                              let member_ptr = L.build_struct_gep record_ptr (get_member_index typ member) member builder in
+                                                              L.build_store (build_expr builder env new_value) member_ptr builder
+      | SRecordAccess((typ, SId(id)), member) -> let record_ptr = (lookup id env) in
+                                                let member_ptr = L.build_struct_gep record_ptr (get_member_index typ member) member builder in
+                                                L.build_load member_ptr member builder
+
+      | SBoolLit b                        -> L.const_int i1_t (if b then 1 else 0)
+      | SStrLit s                         -> L.build_global_stringptr s "tmp" builder
+      | SId id                            -> L.build_load (lookup id env) id builder
+      | SAssign (s, e)                    -> let e' = build_expr builder env e in
         ignore(L.build_store e' (lookup s env) builder); e'
       | SBinop (e1, op, e2) ->
           let e1' = build_expr builder env e1
@@ -239,9 +261,9 @@ let translate decls =
 
   List.iter (fun x -> 
         let (SRecordDef(rec_name, formals)) = x in
-        let record = (L.named_struct_type context "Person") in 
+        let record = (L.named_struct_type context rec_name) in 
         ignore(L.struct_set_body record (build_record_formals_ltypes_array formals) false);
-        ignore(L.declare_global record "Person" josh_module);
+        ignore(L.declare_global record rec_name josh_module);
     ) record_defs;
 
   List.iter build_function_body functions;
