@@ -74,9 +74,6 @@ let check decls =
       | _ ->  StringMap.add n rd map
     in
 
-    let globals = StringMap.empty
-    in
-
     (* Find all the function definitions in the program. *)
     let functions = List.filter_map
                     (function Fdecl f -> Some f | _ -> None)
@@ -363,6 +360,24 @@ let check decls =
         (function Stmt s -> Some s | _ -> None)
          decls
     in
+
+    let globals =
+        let add_global m = function
+            Declare(t, id) -> StringMap.add id t m
+          | Initialize(t, id, e) ->
+              let (t', e') = check_expr m e in
+              let err = "illegal assignment " ^ string_of_typ t ^ " = " ^
+                        string_of_typ t' ^ " in " ^ string_of_expr e
+              in
+              ignore(check_assign t t' err);
+              StringMap.add id t m
+        in
+        List.fold_left add_global StringMap.empty
+        (List.filter_map
+            (function Stmt (Vdecl s) -> Some s | _ -> None)
+            decls)
+    in
+
 
     let env = globals
     in

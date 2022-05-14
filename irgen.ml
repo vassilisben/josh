@@ -4,7 +4,19 @@ open Sast
 
 module StringMap = Map.Make(String)
 
-let translate decls = 
+(* TODO
+ * records
+ *   pass record inside function (fix formals)
+ * global variables
+ *   make them just global function
+ * lists...
+ * record access
+ * standard library things?
+ * write the report
+ * make the video
+ *)
+
+let translate top_level =
   (* boilerplate *)
   let context = L.global_context() in
   let josh_module = L.create_module context "Josh" in
@@ -13,7 +25,7 @@ let translate decls =
   let i32_t       = L.i32_type    context
   and i64_t       = L.i64_type    context
   and i8_t        = L.i8_type     context
-  and i1_t        = L.i1_type     context 
+  and i1_t        = L.i1_type     context
   and float_type  = L.float_type  context
   and void_type   = L.void_type context
   (*and array_type  = (L.array_type)*)
@@ -34,7 +46,7 @@ let translate decls =
   (* Get all functions declarations in source *)
   let functions = List.filter_map
                   (function SFdecl f -> Some f | _ -> None)
-                  decls
+                  top_level
   in
 
   (* TODO: get top level vdecls *)
@@ -42,46 +54,94 @@ let translate decls =
                                       | SStmt(sstmt) -> (match sstmt with
                                         | SRecordDef(id, opts_list) -> Some (SRecordDef(id, opts_list))
                                         | _ -> None)
-                                      | _ -> None) decls
+                                      | _ -> None) top_level
   in
 
-  let globals = []
+  let rec build_global_expr env ((_, e) : sexpr) = match e with
+      SIntLit i                      -> L.const_int i32_t i
+    | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
+    | SStrLit s                      -> L.const_string context s
+    (*| SId id                         -> build_global_expr env (StringMap.find id env)*)
+    | SBinop (e1, op, e2) ->
+        let e1' = build_global_expr env e1
+        and e2' = build_global_expr env e2 in
+        (match op with
+            A.Add     -> L.const_add
+          | A.Sub     -> L.const_sub
+          | A.Mul     -> L.const_mul
+          | A.Div     -> L.const_sdiv
+          | A.Mod     -> L.const_srem
+          | A.And     -> L.const_and
+          | A.Or      -> L.const_or
+          | A.Equal   -> L.const_icmp L.Icmp.Eq
+          | A.Neq     -> L.const_icmp L.Icmp.Ne
+          | A.Less    -> L.const_icmp L.Icmp.Slt
+          | A.Leq     -> L.const_icmp L.Icmp.Sle
+          | A.Greater -> L.const_icmp L.Icmp.Sgt
+          | A.Geq     -> L.const_icmp L.Icmp.Sge
+        ) e1' e2'
+    | _ -> raise (Failure ("Constant cannot have that type"))
+  in
+
+  let globals = List.filter_map (function
+                                      | SStmt(sstmt) -> (match sstmt with
+                                        | SVdecl s -> Some s
+                                        | _ -> None)
+                                      | _ -> None) top_level
   in
 
   let global_vars : L.llvalue StringMap.t =
-    let global_var m (t, n) =
-      let init = L.const_int (ltype_of_typ t [||]) 0
-      in StringMap.add n (L.define_global n init josh_module) m in
-    List.fold_left global_var StringMap.empty globals in
+    let global_var (m,env) = function
+        | SDeclare (t, id) ->
+          let init = (match t with
+              A.Int -> L.const_int (ltype_of_typ t [||]) 0
+            | A.Bool -> L.const_int (ltype_of_typ t [||]) 0
+            | A.Char -> L.const_int (ltype_of_typ t [||]) 0
+            | A.Float -> L.const_float (ltype_of_typ t [||]) 0.0
+            | A.String -> L.const_string context "")
+          in (StringMap.add id (L.define_global id init josh_module) m,
+              env)
+        | SInitialize (t, id, e) ->
+          let init = build_global_expr env e
+          in (StringMap.add id (L.define_global id init josh_module) m,
+              StringMap.add id init env)
+          in
+    fst (List.fold_left global_var (StringMap.empty,StringMap.empty) globals) in
 
   let printf_t : L.lltype =
     L.var_arg_function_type i32_t [| L.pointer_type i8_t |] in
   let printf_func : L.llvalue =
     L.declare_function "printf" printf_t josh_module in
 
-	let bash_t : L.lltype = 
+  let bash_t : L.lltype =
     L.function_type i32_t [| (L.pointer_type (L.i8_type context)) |] in
-	let bash_func : L.llvalue = 
-		L.declare_function "fork_exec" bash_t josh_module in
+    let bash_func : L.llvalue =
+        L.declare_function "fork_exec" bash_t josh_module in
 
   (* create llvm function declarations using the function declarations from source *)
   let function_decls : (L.llvalue * sfdecl) StringMap.t =
-    let function_decl m fdecl = 
+    let function_decl m fdecl =
       let name = fdecl.sfname
-      and formal_types = 
+      and formal_types =
         Array.of_list (List.map (fun (t,_) -> ltype_of_typ t [||]) (List.map (fun (A.Opt(t,id)) -> (t,id)) fdecl.sformals))
       in let ftype = L.function_type (ltype_of_typ fdecl.srtyp [||]) formal_types in
       StringMap.add name (L.define_function name ftype josh_module, fdecl) m in
     List.fold_left function_decl StringMap.empty functions in
-    
+
   (* For each llvm function declaration, create the corresponding llvm 3-addr code function body *)
-  let build_function_body fdecl = 
+  let build_function_body fdecl =
     let (the_function, _) = StringMap.find fdecl.sfname function_decls in
     let builder = L.builder_at_end context (L.entry_block the_function) in
 
     let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder
     and str_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
 
+    let rec lookup n = function
+        [] -> raise (Failure ("Not found: " ^ n))
+      | (frame::frames) ->
+        try StringMap.find n frame
+        with Not_found -> lookup n frames
+    in
 
     (* create space for each function paramter *)
     let add_formal m (t, n) p =
@@ -107,20 +167,12 @@ let translate decls =
         in StringMap.add n local_var m
       in
 
-    (* TODO: FIX *)
-    let rec lookup n = function
-        [] -> raise (Failure ("Not found: " ^ n))
-      | (frame::frames) ->
-        try StringMap.find n frame
-        with Not_found -> lookup n frames
-    in
-
-    let build_record_ltypes_array sexpr_list = 
+    let build_record_ltypes_array sexpr_list =
       let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
       | [] -> lltype_list
       | hd::tl ->
           let ((typ,_) : sexpr) = hd in (build_record_ptr_helper ((ltype_of_typ typ [||])::lltype_list) tl) (* no support for nested records yet *)
-      in 
+      in
 
       let record_types_list = (build_record_ptr_helper [] sexpr_list) in
       let find_ith_type i = (List.nth record_types_list i) in
@@ -183,13 +235,13 @@ let translate decls =
       | SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder env e) |] "fork_exec" builder
       | SCall (f, args) ->
         let (fdef, fdecl) = StringMap.find f function_decls in
-        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in 
+        let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         let result = f ^ "_result" in
         L.build_call fdef (Array.of_list llargs) result builder
 
     in
 
-    let add_terminal builder instr = 
+    let add_terminal builder instr =
       match L.block_terminator (L.insertion_block builder) with
         Some _ -> ()
       | None -> ignore (instr builder) in
@@ -198,7 +250,9 @@ let translate decls =
         SBlock sl -> List.fold_left (fun (a,b) x -> build_stmt a b x) (builder,env) sl
       | SExpr e -> ignore(build_expr builder env e); (builder, env)
       | SReturn e -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env)
-      | SWhile (predicate, body) -> 
+      (*| SContinue -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env) (* TODO *) *)
+      (*| SBreak -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env)  (* TODO *) *)
+      | SWhile (predicate, body) ->
         let while_bb = L.append_block context "while" the_function in
         let build_br_while = L.build_br while_bb in (* partial function *)
         ignore (build_br_while builder);
@@ -225,8 +279,8 @@ let translate decls =
 
         let end_bb = L.append_block context "if_end" the_function in
         let build_br_end = L.build_br end_bb in (* partial function *)
-        add_terminal then_builder (*(L.builder_at_end context then_bb)*) build_br_end;
-        add_terminal else_builder (*(L.builder_at_end context else_bb)*) build_br_end;
+        add_terminal then_builder build_br_end;
+        add_terminal else_builder build_br_end;
 
         ignore(L.build_cond_br bool_val then_bb else_bb builder);
         (L.builder_at_end context end_bb, env)
@@ -249,17 +303,17 @@ let translate decls =
     add_terminal func_builder (L.build_ret (L.const_int i32_t 0))
   in
 
-  let build_record_formals_ltypes_array (opt_list : A.opt list) = 
+  let build_record_formals_ltypes_array (opt_list : A.opt list) =
     let rec aux (opt_list : A.opt list) llopt_list = match opt_list with
-    | [] -> llopt_list 
-    | A.Opt(typ, _)::tl -> aux tl ( (ltype_of_typ typ [||])::llopt_list) 
+    | [] -> llopt_list
+    | A.Opt(typ, _)::tl -> aux tl ( (ltype_of_typ typ [||])::llopt_list)
     in
     let formals_ltypes_list = List.rev (aux opt_list []) in
     let find_ith_type i = (List.nth formals_ltypes_list i) in
     Array.init (List.length formals_ltypes_list) find_ith_type
   in
 
-  List.iter (fun x -> 
+  List.iter (fun x ->
         let (SRecordDef(rec_name, formals)) = x in
         let record = (L.named_struct_type context rec_name) in 
         ignore(L.struct_set_body record (build_record_formals_ltypes_array formals) false);
@@ -268,8 +322,7 @@ let translate decls =
 
   List.iter build_function_body functions;
 
-	let llmem = L.MemoryBuffer.of_file "liberate_josh.bc" in
+  let llmem = L.MemoryBuffer.of_file "liberate_josh.bc" in
   let llm = Llvm_bitreader.parse_bitcode context llmem in
-	ignore(Llvm_linker.link_modules' josh_module llm);
+  ignore(Llvm_linker.link_modules' josh_module llm);
   josh_module
-
