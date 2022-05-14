@@ -22,6 +22,12 @@ ocamlbuild -pkgs llvm,llvm.bitreader,llvm.linker josh.native
 lli simple.out
 ```
 
+### Testing
+```
+chmod 755 run_tests.sh
+./run_tests.sh
+```
+
 -------
 ### To build our C library (liberate_josh.bc)
 ```
