@@ -7,8 +7,6 @@ module StringMap = Map.Make(String)
 (* TODO
  * records
  *   pass record inside function (fix formals)
- * global variables
- *   make them just global function
  * lists...
  * record access
  * standard library things?
@@ -23,14 +21,15 @@ let translate top_level =
 
   (* types *)
   let i32_t       = L.i32_type    context
+  and i64_t       = L.i64_type    context
   and i8_t        = L.i8_type     context
   and i1_t        = L.i1_type     context
   and float_type  = L.float_type  context
   and void_type   = L.void_type context
-  (*and array_type  = (L.array_type)*)
+  and array_type  = (L.array_type)
   and record_type = (L.struct_type context) in
 
-  let ltype_of_typ typ arr = match typ with
+  let rec ltype_of_typ typ arr = match typ with
       A.Int           -> i32_t
     | A.Bool          -> i1_t
     | A.Char          -> i8_t
@@ -38,7 +37,7 @@ let translate top_level =
     | A.Void          -> void_type
     | A.String        -> L.pointer_type (L.i8_type context)
     | A.RecordType id -> record_type arr
-    (*| A.ListT l -> array_type*)
+    | A.ListT (ty,_)  -> array_type (ltype_of_typ ty [||]) 0 (* we will malloc later *)
     | _ -> i32_t
   in
 
@@ -78,6 +77,10 @@ let translate top_level =
           | A.Greater -> L.const_icmp L.Icmp.Sgt
           | A.Geq     -> L.const_icmp L.Icmp.Sge
         ) e1' e2'
+    | SListLit(sactuals) ->
+            let t = ltype_of_typ (fst (List.hd sactuals)) [||] in
+            let values = Array.of_list (List.map (build_global_expr env) sactuals) in
+            L.const_array t values
     | _ -> raise (Failure ("Constant cannot have that type"))
   in
 
@@ -194,7 +197,13 @@ let translate top_level =
       L.set_value_name n p;
 
       (* TODO: expand to support records/lists *)
-      let local = L.build_alloca (ltype_of_typ t [||]) n builder in
+      let local = match t with
+        | (A.RecordType id) as r ->
+            let global_type = (L.type_by_name josh_module "Person") in (match global_type with
+                Some t -> L.build_alloca (ltype_of_typ r (L.struct_element_types t)) n builder
+              | None -> raise(Failure("Unrecognized record type")))
+        | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
+      in
       ignore (L.build_store p local builder);
       StringMap.add n local m
     in
@@ -206,7 +215,7 @@ let translate top_level =
       (* create space for each local var declaration *)
         let local_var = match t with
         | A.RecordType id ->
-            let global_type = (L.type_by_name josh_module "Person") in (match global_type with
+            let global_type = (L.type_by_name josh_module id) in (match global_type with
               Some t -> L.build_alloca t n builder
               | None -> raise(Failure("Unrecognized record type")))
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
@@ -226,16 +235,37 @@ let translate top_level =
       Array.init (List.length record_types_list) find_ith_type
     in
 
+    let get_member_index record_name member =
+      let rec aux record_defs_left record_name member = match record_defs_left with
+      | [] -> raise(Failure("Couldn't find record type"))
+      | hd::tl -> let (SRecordDef(rec_name, formals)) = hd in match ("record " ^ rec_name) with
+        | record_name -> let rec formals_aux formals_left index = match formals_left with
+          | [] -> raise(Failure("Couldn't find member"))
+          | hd::tl -> let A.Opt(_,id) = hd in match id with
+            | member -> index
+            | _ -> formals_aux tl (index+1)
+          in formals_aux formals 0
+        | _ -> (aux tl record_name member)
+      in
+      aux record_defs record_name member
+    in
+
     let rec build_expr builder ((frame::frames) as env) ((_, e) : sexpr) = match e with
-        SIntLit i                      -> L.const_int i32_t i
-			| SFloatLit f                    -> L.const_float float_type f 
-      | SRecordCreate (id, sexpr_list) -> let global_type = (L.type_by_name josh_module "Person") in (match global_type with
-                                          Some t -> (L.build_alloca t id builder) (*L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder*)
-                                          | None -> raise(Failure("Unrecognized record type")))
-      | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
-      | SStrLit s                      -> L.build_global_stringptr s "tmp" builder
-      | SId id                         -> L.build_load (lookup id env) id builder
-      | SAssign (s, e)                 -> let e' = build_expr builder env e in
+        SIntLit i                         -> L.const_int i32_t i
+      | SRecordCreate (id, sexpr_list)    -> let global_type = (L.type_by_name josh_module id) in (match global_type with
+                                               Some t -> (L.build_alloca t id builder) (*L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder*)
+                                               | None -> raise(Failure("Unrecognized record type")))
+      | SMutateRecord(((typ, SId(id)), member), new_value) -> let record_ptr = (lookup id env) in
+                                                              let member_ptr = L.build_struct_gep record_ptr (get_member_index typ member) member builder in
+                                                              L.build_store (build_expr builder env new_value) member_ptr builder
+      | SRecordAccess((typ, SId(id)), member) -> let record_ptr = (lookup id env) in
+                                                let member_ptr = L.build_struct_gep record_ptr (get_member_index typ member) member builder in
+                                                L.build_load member_ptr member builder
+
+      | SBoolLit b                        -> L.const_int i1_t (if b then 1 else 0)
+      | SStrLit s                         -> L.build_global_stringptr s "tmp" builder
+      | SId id                            -> L.build_load (lookup id env) id builder
+      | SAssign (s, e)                    -> let e' = build_expr builder env e in
         ignore(L.build_store e' (lookup s env) builder); e'
       | SBinop (e1, op, e2) ->
           let e1' = build_expr builder env e1
@@ -255,6 +285,33 @@ let translate top_level =
             | A.Greater -> L.build_icmp L.Icmp.Sgt
             | A.Geq     -> L.build_icmp L.Icmp.Sge
           ) e1' e2' "tmp" builder
+      | SListLit(exprs) ->
+            let t = ltype_of_typ (fst (List.hd exprs)) [||] in
+            let n_bytes = L.const_mul (L.const_int i32_t (List.length exprs))
+                                      (L.size_of (ltype_of_typ (fst (List.hd exprs)) [||]))
+            in
+            let arr = L.build_array_malloc t n_bytes "tmp" builder in
+            fst (List.fold_left
+              (fun (agg,idx) e ->
+                  (*(L.build_insertvalue agg
+                    (build_expr builder env e) idx "tmp" builder,*)
+                  (let e' = build_expr builder env e in
+                  let p = L.build_gep agg [|L.const_int i32_t idx; L.const_int i32_t 0|] "tmp" builder in
+                  L.build_store p e' builder,
+                  idx+1)) (arr, 0) exprs)
+      | SListAccess(e1, e2) ->
+            let arr = build_expr builder env e1 in
+            let idx = build_expr builder env e2 in
+            let p = L.build_gep arr [|idx|] "tmp" builder in
+            L.build_load p "tmp" builder
+            (* TODO: list index out of bounds *)
+      | SMutateList((e1, i), e2) as ex ->
+            let arr = build_expr builder env e1 in
+            let idx = build_expr builder env i in
+            let value = build_expr builder env e2 in
+            let p = L.build_gep arr [|idx; L.const_int i32_t 0|] "tmp" builder in
+            L.build_store p value builder
+            (* TODO: list index out of bounds *)
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("echof", [e]) -> L.build_call printf_func [| flt_format_str ; (build_expr builder env e) |] "printf" builder
 			| SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
@@ -360,9 +417,9 @@ let translate top_level =
 
   List.iter (fun x ->
         let (SRecordDef(rec_name, formals)) = x in
-        let record = (L.named_struct_type context "Person") in
+        let record = (L.named_struct_type context rec_name) in
         ignore(L.struct_set_body record (build_record_formals_ltypes_array formals) false);
-        ignore(L.declare_global record "Person" josh_module);
+        ignore(L.declare_global record rec_name josh_module);
     ) record_defs;
 
   List.iter build_function_body functions;

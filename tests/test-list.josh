@@ -1,0 +1,5 @@
+IGNORE
+int main() {
+    [int] myList;
+    return 0;
+}
