@@ -55,7 +55,7 @@ typ:
   | FLOAT   { Float }
   | CHAR    { Char }
   | STRING  { String }
-  | LBRACK typ RBRACK { ListT($2) }
+  | typ LBRACK expr RBRACK { ListT($1, $3) }
   | VOID    { Void }
   | RECORD ID { RecordType($2) }
   | typ LPAREN typs_list RPAREN { FunkType($3, $1) }

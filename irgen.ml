@@ -7,8 +7,6 @@ module StringMap = Map.Make(String)
 (* TODO
  * records
  *   pass record inside function (fix formals)
- * global variables
- *   make them just global function
  * lists...
  * record access
  * standard library things?
@@ -27,10 +25,10 @@ let translate top_level =
   and i1_t        = L.i1_type     context
   and float_type  = L.float_type  context
   and void_type   = L.void_type context
-  (*and array_type  = (L.array_type)*)
+  and array_type  = (L.array_type)
   and record_type = (L.struct_type context) in
 
-  let ltype_of_typ typ arr = match typ with
+  let rec ltype_of_typ typ arr = match typ with
       A.Int           -> i32_t
     | A.Bool          -> i1_t
     | A.Char          -> i8_t
@@ -38,7 +36,7 @@ let translate top_level =
     | A.Void          -> void_type
     | A.String        -> L.pointer_type (L.i8_type context)
     | A.RecordType id -> record_type arr
-    (*| A.ListT l -> array_type*)
+    | A.ListT (ty,_)  -> array_type (ltype_of_typ ty [||]) 0 (* we will malloc later *)
     | _ -> i32_t
   in
 
@@ -79,6 +77,10 @@ let translate top_level =
           | A.Greater -> L.const_icmp L.Icmp.Sgt
           | A.Geq     -> L.const_icmp L.Icmp.Sge
         ) e1' e2'
+    | SListLit(sactuals) ->
+            let t = ltype_of_typ (fst (List.hd sactuals)) [||] in
+            let values = Array.of_list (List.map (build_global_expr env) sactuals) in
+            L.const_array t values
     | _ -> raise (Failure ("Constant cannot have that type"))
   in
 
@@ -147,7 +149,13 @@ let translate top_level =
       L.set_value_name n p;
 
       (* TODO: expand to support records/lists *)
-      let local = L.build_alloca (ltype_of_typ t [||]) n builder in
+      let local = match t with
+        | (A.RecordType id) as r ->
+            let global_type = (L.type_by_name josh_module "Person") in (match global_type with
+                Some t -> L.build_alloca (ltype_of_typ r (L.struct_element_types t)) n builder
+              | None -> raise(Failure("Unrecognized record type")))
+        | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
+      in
       ignore (L.build_store p local builder);
       StringMap.add n local m
     in
@@ -160,7 +168,7 @@ let translate top_level =
         let local_var = match t with
         | A.RecordType id ->
             let global_type = (L.type_by_name josh_module "Person") in (match global_type with
-              Some t -> L.build_alloca t n builder
+                Some t -> L.build_alloca t n builder
               | None -> raise(Failure("Unrecognized record type")))
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
         in StringMap.add n local_var m
@@ -207,6 +215,33 @@ let translate top_level =
             | A.Greater -> L.build_icmp L.Icmp.Sgt
             | A.Geq     -> L.build_icmp L.Icmp.Sge
           ) e1' e2' "tmp" builder
+      | SListLit(exprs) ->
+            let t = ltype_of_typ (fst (List.hd exprs)) [||] in
+            let n_bytes = L.const_mul (L.const_int i32_t (List.length exprs))
+                                      (L.size_of (ltype_of_typ (fst (List.hd exprs)) [||]))
+            in
+            let arr = L.build_array_malloc t n_bytes "tmp" builder in
+            fst (List.fold_left
+              (fun (agg,idx) e ->
+                  (*(L.build_insertvalue agg
+                    (build_expr builder env e) idx "tmp" builder,*)
+                  (let e' = build_expr builder env e in
+                  let p = L.build_gep agg [|L.const_int i32_t idx; L.const_int i32_t 0|] "tmp" builder in
+                  L.build_store p e' builder,
+                  idx+1)) (arr, 0) exprs)
+      | SListAccess(e1, e2) ->
+            let arr = build_expr builder env e1 in
+            let idx = build_expr builder env e2 in
+            let p = L.build_gep arr [|idx|] "tmp" builder in
+            L.build_load p "tmp" builder
+            (* TODO: list index out of bounds *)
+      | SMutateList((e1, i), e2) as ex ->
+            let arr = build_expr builder env e1 in
+            let idx = build_expr builder env i in
+            let value = build_expr builder env e2 in
+            let p = L.build_gep arr [|idx; L.const_int i32_t 0|] "tmp" builder in
+            L.build_store p value builder
+            (* TODO: list index out of bounds *)
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder env e) |] "fork_exec" builder

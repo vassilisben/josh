@@ -10,7 +10,7 @@ type typ =
   | Float
   | Char
   | String
-  | ListT of typ
+  | ListT of typ * expr
   | Void
   | EmptyList
   | RecordType of id
@@ -18,7 +18,7 @@ type typ =
 
 and opt = Opt of typ * id
 
-type expr =
+and expr =
   | Noexpr
   | IntLit of int
   | BoolLit of bool
@@ -77,7 +77,7 @@ let rec string_of_typ = function
   | Void -> "void"
   | EmptyList -> "EmptyList"
   | RecordType(t) -> "record " ^ t
-  | ListT(t) -> "[" ^ (string_of_typ t) ^ "]"
+  | ListT(t,_) -> (string_of_typ t) ^ "[" ^ "]" (* Length check is done in IR gen. *)
   | FunkType(types, return_typ) ->
     string_of_typ return_typ ^ "(" ^ String.concat ", " (List.map string_of_typ types) ^ ")"
 and string_of_opt = function

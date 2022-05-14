@@ -224,14 +224,14 @@ let check decls =
                                     string_of_typ t ^ ", " ^ string_of_typ t'
                                     ^ " in " ^ string_of_expr ex)))
             actuals []
-        in if List.length sactuals > 0 then (ListT(fst (List.hd sactuals)), SListLit(sactuals))
+        in if List.length sactuals > 0 then (ListT(fst (List.hd sactuals), IntLit(List.length sactuals)), SListLit(sactuals))
 		else (EmptyList, SNoexpr)
       | ListAccess(e1, e2) as ex ->
         let (t2, e2') = check_expr env e2 in
         let (t1, e1') = check_expr env e1 in
         (match t1 with
-            ListT(t) when t2 = Int -> (t, SListAccess((t1, e1'), (t2, e2')))
-          | ListT(t) ->
+            ListT(t, _) when t2 = Int -> (t, SListAccess((t1, e1'), (t2, e2')))
+          | ListT(t, _) ->
                   raise (Failure ("list index found " ^
                                   string_of_typ t ^ ", expected Int in "
                                   ^ string_of_expr ex))
@@ -243,14 +243,14 @@ let check decls =
         let (it, i') = check_expr env i in
         let (t1, e1') = check_expr env e1 in
         (match t1 with
-            ListT(t) when it = Int ->
+            ListT(t, _) when it = Int ->
                 let (t2, e2') = check_expr env e2 in
                 if t != t2 then
                   raise (Failure ("list of type " ^ string_of_typ t ^
                                   " cannot be assigned to type " ^
                                   string_of_typ t2 ^ " in " ^ string_of_expr ex))
                 else (t2, SMutateList(((t1, e1'), (it, i')), (t2, e2')))
-          | ListT(t) ->
+          | ListT(t, _) ->
                   raise (Failure ("list index found " ^
                                   string_of_typ t ^ ", expected Int in "
                                   ^ string_of_expr ex))
