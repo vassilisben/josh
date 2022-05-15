@@ -1,6 +1,20 @@
 open Ast
 
-type sexpr = typ * sx
+type styp =
+  | SInt
+  | SBool
+  | SFloat
+  | SChar
+  | SString
+  | SListT of styp * sexpr
+  | SVoid
+  | SEmptyList
+  | SRecordType of id
+  | SFunkType of styp list * styp
+
+and sopt = SOpt of styp * id
+
+and sexpr = styp * sx
 and sx =
   | SNoexpr
   | SIntLit of int
@@ -23,8 +37,8 @@ and sx =
   | SCallList of (sexpr * sexpr) * sexpr list
 
 type svdecl =
-  | SDeclare of typ * id
-  | SInitialize of typ * id * sexpr
+  | SDeclare of styp * id
+  | SInitialize of styp * id * sexpr
 
 type sstmt =
   | SBlock of sstmt list
@@ -33,15 +47,15 @@ type sstmt =
   | SIf of sexpr * sstmt * sstmt
   | SFor of sexpr * sexpr * sexpr * sstmt
   | SWhile of sexpr * sstmt
-  | SRecordDef of id * opt list
+  | SRecordDef of id * sopt list
   | SReturn of sexpr
   | SContinue
   | SBreak
 
 type sfdecl = {
-  srtyp: typ;
+  srtyp: styp;
   sfname: id;
-  sformals: opt list;
+  sformals: sopt list;
   sbody: sstmt list;
 }
 
@@ -51,8 +65,24 @@ type stop_level =
 
 type sprogram = stop_level list
 
+let rec string_of_styp = function
+    SInt -> "int"
+  | SBool -> "bool"
+  | SFloat -> "float"
+  | SString -> "string"
+  | SChar -> "char"
+  | SVoid -> "void"
+  | SEmptyList -> "EmptyList"
+  | SRecordType(t) -> "record " ^ t
+  | SListT(t,_) -> (string_of_styp t) ^ "[" ^ "]" (* Length check is done in IR gen. *)
+  | SFunkType(types, return_typ) ->
+    string_of_styp return_typ ^ "(" ^ String.concat ", " (List.map string_of_styp types) ^ ")"
+and string_of_opt = function
+  | SOpt(t, id) -> string_of_styp t ^ " " ^ id
+and string_of_opt_list l = String.concat ", " (List.map string_of_opt l)
+
 let rec string_of_sexpr (t, e) =
-  "(" ^ string_of_typ t ^ " : " ^ (match e with
+  "(" ^ string_of_styp t ^ " : " ^ (match e with
     SIntLit(l) -> string_of_int l
   | SBoolLit(true) -> "true"
   | SBoolLit(false) -> "false"
@@ -82,8 +112,8 @@ let rec string_of_sexpr (t, e) =
   ) ^ ")"
 
 let string_of_svdecl = function
-  | SDeclare(t, id) -> string_of_typ t ^ " " ^ id ^ ";"
-  | SInitialize(t, id, sexpr) -> string_of_typ t ^ " " ^ id ^ " = " ^ string_of_sexpr sexpr ^ ";"
+  | SDeclare(t, id) -> string_of_styp t ^ " " ^ id ^ ";"
+  | SInitialize(t, id, sexpr) -> string_of_styp t ^ " " ^ id ^ " = " ^ string_of_sexpr sexpr ^ ";"
 
 let rec string_of_sstmt = function
     SBlock(stmts) ->
@@ -101,7 +131,7 @@ let rec string_of_sstmt = function
   | SBreak -> "break;"
 
 let string_of_sfdecl f =
-    string_of_typ f.srtyp ^ " " ^
+    string_of_styp f.srtyp ^ " " ^
     f.sfname ^ "(" ^
     string_of_opt_list f.sformals ^ ") {\n  " ^
     String.concat "\n  " (List.map string_of_sstmt f.sbody)
