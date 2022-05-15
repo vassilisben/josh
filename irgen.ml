@@ -171,9 +171,9 @@ let translate top_level =
       | hd::tl -> let (SRecordDef(rec_name, formals)) = hd in match ("record " ^ rec_name) with
         | record_name -> let rec formals_aux formals_left index = match formals_left with
           | [] -> raise(Failure("Couldn't find member"))
-          | hd::tl -> let SOpt(_,id) = hd in match id with
-            | member -> index
-            | _ -> formals_aux tl (index+1)
+          | hd::tl -> let SOpt(_,id) = hd in match (compare id member) with
+            | 0 -> index
+            | -1 -> formals_aux tl (index+1)
           in formals_aux formals 0
         | _ -> (aux tl record_name member)
       in
