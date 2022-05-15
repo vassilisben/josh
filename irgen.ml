@@ -219,29 +219,27 @@ let translate top_level =
           ) e1' e2' "tmp" builder
       | SListLit(exprs) ->
             let t = ltype_of_typ (fst (List.hd exprs)) [||] in
-            let n_bytes = L.const_mul (L.const_int i32_t (List.length exprs))
-                                      (L.size_of (ltype_of_typ (fst (List.hd exprs)) [||]))
-            in
-            let arr_ptr = L.build_array_malloc t n_bytes "tmp" builder in
-            fst (List.fold_left
-              (fun (agg,idx) e ->
-                  (*(L.build_insertvalue agg
-                    (build_expr builder env e) idx "tmp" builder,*)
-                  (let e' = build_expr builder env e in
-                  let arr_ptr' = L.build_gep agg [|L.const_int i32_t idx; L.const_int i32_t 0|] "tmp" builder in
-                  L.build_store e' arr_ptr builder,
-                  idx+1)) (arr_ptr, 0) exprs)
+            let n_elts = L.const_int i32_t (List.length exprs) in
+            let arr_ptr = L.build_array_malloc t n_elts "tmp" builder in
+            let _ = List.fold_left
+              (fun idx e ->
+                  let e' = build_expr builder env e in
+                  let arr_ptr' = L.build_in_bounds_gep arr_ptr [|L.const_int i32_t idx|] "tmp" builder in
+                  ignore(L.build_store e' arr_ptr' builder);
+                  idx+1)
+              0 exprs
+            in arr_ptr
       | SListAccess(e1, e2) ->
             let arr = build_expr builder env e1 in
             let idx = build_expr builder env e2 in
-            let p = L.build_gep arr [|idx|] "tmp" builder in
+            let p = L.build_in_bounds_gep arr [|idx|] "tmp" builder in
             L.build_load p "tmp" builder
             (* TODO: list index out of bounds *)
       | SMutateList((e1, i), e2) as ex ->
             let arr = build_expr builder env e1 in
             let idx = build_expr builder env i in
             let value = build_expr builder env e2 in
-            let p = L.build_gep arr [|idx; L.const_int i32_t 0|] "tmp" builder in
+            let p = L.build_in_bounds_gep arr [|idx|] "tmp" builder in
             L.build_store value p builder
             (* TODO: list index out of bounds *)
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder env e) |] "printf" builder
@@ -262,10 +260,14 @@ let translate top_level =
             let global_type = (L.type_by_name josh_module id) in (match global_type with
               Some t -> L.build_alloca t n builder
               | None -> raise(Failure("Unrecognized record type")))
-        | (SListT(typ, l)) as lst ->
+        (*| (SListT(typ, l)) as lst ->
             let e = build_expr builder m l in
+            let elt_size = L.const_ptrtoint (L.const_gep (L.const_null (L.pointer_type (ltype_of_typ typ [||]))) [|L.const_int i32_t 1|]) i32_t
+            in
+            let n_bytes = L.build_mul e elt_size "tmp" builder
+            in
             let arr_ptr = L.build_array_malloc (ltype_of_typ typ [||]) e "tmp" builder in
-            arr_ptr
+            arr_ptr*)
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
         in StringMap.add n local_var (List.hd m)
     in
@@ -274,16 +276,15 @@ let translate top_level =
     let add_formal m (t, n) p =
       L.set_value_name n p;
 
-      (* TODO: expand to support records/lists *)
       let local = match t with
         | (SRecordType id) as r ->
             let global_type = (L.type_by_name josh_module id) in (match global_type with
                 Some t -> L.build_alloca (ltype_of_typ r (L.struct_element_types t)) n builder
               | None -> raise(Failure("Unrecognized record type")))
-        | (SListT(typ, l)) as lst ->
+        (*| (SListT(typ, l)) as lst ->
             let e = build_expr builder m l in
             let arr_ptr = L.build_array_malloc (ltype_of_typ typ [||]) e "tmp" builder in
-            arr_ptr
+            arr_ptr*)
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
       in
       ignore (L.build_store p local builder);

@@ -1,0 +1,11 @@
+int main() {
+    int[3] x;
+    x = [1,2,5];
+    x[0] = 10;
+    echoi(x[0]);
+    echoi(x[1]);
+    echoi(x[2]);
+    x[4] = 7;
+    echoi(x[4]);
+    return 0;
+}
