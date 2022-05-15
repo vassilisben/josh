@@ -53,12 +53,33 @@ let translate top_level =
                   top_level
   in
 
-  (* TODO: get top level vdecls *)
   let record_defs = List.filter_map (function
                                       | SStmt(sstmt) -> (match sstmt with
                                         | SRecordDef(id, opts_list) -> Some (SRecordDef(id, opts_list))
                                         | _ -> None)
                                       | _ -> None) top_level
+  in
+
+  let _ =
+      let build_record_formals_ltypes_array (opt_list : sopt list) =
+        let rec aux (opt_list : sopt list) llopt_list = match opt_list with
+        | [] -> llopt_list
+        | SOpt(typ, _)::tl -> aux tl ( (ltype_of_typ typ [||])::llopt_list)
+        in
+        let formals_ltypes_list = List.rev (aux opt_list []) in
+        let find_ith_type i = (List.nth formals_ltypes_list i) in
+        Array.init (List.length formals_ltypes_list) find_ith_type
+      in
+
+      ignore(
+          List.iter (fun x ->
+                let (SRecordDef(rec_name, formals)) = x in
+                let record = (L.named_struct_type context rec_name) in
+                ignore(L.struct_set_body record (build_record_formals_ltypes_array formals) false);
+                ignore(L.declare_global record rec_name josh_module);
+            ) record_defs;
+      );
+      ()
   in
 
   let rec build_global_expr env ((_, e) : sexpr) = match e with
@@ -129,11 +150,18 @@ let translate top_level =
 
   (* create llvm function declarations using the function declarations from source *)
   let function_decls : (L.llvalue * sfdecl) StringMap.t =
+    let get_formal_type = function
+        | (SRecordType id) as r ->
+            let global_type = (L.type_by_name josh_module id) in (match global_type with
+                Some t -> ltype_of_typ r (L.struct_element_types t)
+              | None -> raise(Failure("Unrecognized record type")))
+        | t -> ltype_of_typ t [||]
+    in
     let function_decl m fdecl =
       let name = fdecl.sfname
       and formal_types =
-        Array.of_list (List.map (fun (t,_) -> ltype_of_typ t [||]) (List.map (fun (SOpt(t,id)) -> (t,id)) fdecl.sformals))
-      in let ftype = L.function_type (ltype_of_typ fdecl.srtyp [||]) formal_types in
+        Array.of_list (List.map (fun (t, _) -> get_formal_type t) (List.map (fun (SOpt(t,id)) -> (t,id)) fdecl.sformals))
+      in let ftype = L.function_type (get_formal_type fdecl.srtyp) formal_types in
       StringMap.add name (L.define_function name ftype josh_module, fdecl) m in
     List.fold_left function_decl StringMap.empty functions in
 
@@ -268,17 +296,17 @@ let translate top_level =
     let add_local (m:L.llvalue StringMap.t list) (t, n) =
       (* create space for each local var declaration *)
         let local_var = match t with
-        | SRecordType id ->
+        | (SRecordType id) as r ->
             let global_type = (L.type_by_name josh_module id) in (match global_type with
-              Some t -> L.build_alloca t n builder
+              Some t -> L.build_alloca (ltype_of_typ r (L.struct_element_types t)) n builder
               | None -> raise(Failure("Unrecognized record type")))
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
         in StringMap.add n local_var (List.hd m)
     in
 
     (* create space for each function paramter *)
-    let add_formal m (t, n) p =
-      L.set_value_name n p;
+    let add_formal m (t, n) param_id =
+      L.set_value_name n param_id;
 
       let local = match t with
         | (SRecordType id) as r ->
@@ -287,7 +315,7 @@ let translate top_level =
               | None -> raise(Failure("Unrecognized record type")))
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
       in
-      ignore (L.build_store p local builder);
+      ignore (L.build_store param_id local builder);
       StringMap.add n local (List.hd m)
     in
 
@@ -369,23 +397,6 @@ let translate top_level =
     let (func_builder, _) = build_stmt builder [formals; globals] (SBlock fdecl.sbody) in
     add_terminal func_builder (L.build_ret (L.const_int i32_t 0))
   in
-
-  let build_record_formals_ltypes_array (opt_list : sopt list) =
-    let rec aux (opt_list : sopt list) llopt_list = match opt_list with
-    | [] -> llopt_list
-    | SOpt(typ, _)::tl -> aux tl ( (ltype_of_typ typ [||])::llopt_list)
-    in
-    let formals_ltypes_list = List.rev (aux opt_list []) in
-    let find_ith_type i = (List.nth formals_ltypes_list i) in
-    Array.init (List.length formals_ltypes_list) find_ith_type
-  in
-
-  List.iter (fun x ->
-        let (SRecordDef(rec_name, formals)) = x in
-        let record = (L.named_struct_type context rec_name) in
-        ignore(L.struct_set_body record (build_record_formals_ltypes_array formals) false);
-        ignore(L.declare_global record rec_name josh_module);
-    ) record_defs;
 
   List.iter build_function_body functions;
 
