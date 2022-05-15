@@ -44,8 +44,18 @@ let check decls =
       in
       List.fold_left add_decl StringMap.empty [
         ("echoi", [Opt(Int, "i")], Void);
+				("echof", [Opt(Float, "f")], Void);
         ("echo", [Opt(String, "s")], Void);
-        ("bash",  [Opt(String, "cmd")], Int)
+        ("bash",  [Opt(String, "cmd")], Int);
+				("sqrt", [Opt(Int, "x")], Float);
+				("fsqrt", [Opt(Float, "f")], Float);
+				("pow", [Opt(Int, "a");Opt(Int, "b")], Int);
+				("fpow", [Opt(Float, "a");Opt(Float, "b")], Float);
+				("int_to_float", [Opt(Int, "x")], Float);
+				("float_to_int", [Opt(Float, "f")], Int);
+				("concat", [Opt(String, "s1");Opt(String, "s2")], String);
+				("strcmp", [Opt(String, "s1");Opt(String, "s2")], Int);
+				("subset", [Opt(String, "init");Opt(Int, "start");Opt(Int, "end")], String)
       ]
     in
 

@@ -1,0 +1,14 @@
+int main() {
+	int a = 21;
+	int b = 6;
+	if ( pow(a, b) > pow(b,a)) {
+		float c = int_to_float(pow(a, b));
+		while (float_to_int(c) > 2) {
+			c = fsqrt(c);
+			echof(c);
+		}
+	}
+	echo("done");
+	return 0;
+
+}

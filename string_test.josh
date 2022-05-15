@@ -1,0 +1,11 @@
+int main() {
+	string a = "aaa";
+	string b = "bbb";
+	string c = concat(b, a);
+
+	if (strcmp(subset(c, 0, 3), b) == 0) {
+		echo("I can compare strings now!");
+		bash("curl parrot.live");
+	}
+	return 0;
+}
