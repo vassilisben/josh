@@ -21,12 +21,10 @@ let translate top_level =
 
   (* types *)
   let i32_t       = L.i32_type    context
-  and i64_t       = L.i64_type    context
   and i8_t        = L.i8_type     context
   and i1_t        = L.i1_type     context
   and float_type  = L.float_type  context
   and void_type   = L.void_type context
-  and array_type  = (L.array_type)
   and record_type = (L.struct_type context) in
 
   let rec ltype_of_typ typ arr = match typ with
@@ -233,7 +231,7 @@ let translate top_level =
       | [] -> lltype_list
       | hd::tl ->
           let ((typ,_) : sexpr) = hd in (build_record_ptr_helper ((ltype_of_typ typ [||])::lltype_list) tl) (* no support for nested records yet *)
-      in
+      in 
 
       let record_types_list = (build_record_ptr_helper [] sexpr_list) in
       let find_ith_type i = (List.nth record_types_list i) in
@@ -257,7 +255,7 @@ let translate top_level =
     in
 
     let rec build_expr builder env ((_, e) : sexpr) =
-        let frame = List.hd env in match e with
+         match e with
       | SNoexpr -> L.build_add (L.const_int i32_t 0) (L.const_int i32_t 0) "tmp" builder
       | SIntLit i                         -> L.const_int i32_t i
       | SRecordCreate (id, sexpr_list)    -> let global_type = (L.type_by_name josh_module id) in (match global_type with
@@ -271,6 +269,7 @@ let translate top_level =
                                                 L.build_load member_ptr member builder
 
       | SBoolLit b                        -> L.const_int i1_t (if b then 1 else 0)
+			| SFloatLit f												-> L.const_float float_type f
       | SStrLit s                         -> L.build_global_stringptr s "tmp" builder
       | SId id                            -> L.build_load (lookup id env) id builder
       | SAssign (s, e)                    ->
@@ -284,7 +283,6 @@ let translate top_level =
               ignore(L.build_store e' p builder); e'
       | SBinop (e1, op, e2) ->
           let (t1,_) = e1 in
-          let (t2,_) = e2 in
           let e1' = build_expr builder env e1
           and e2' = build_expr builder env e2 in
           (match op with
@@ -330,7 +328,7 @@ let translate top_level =
                 let *)
             let p = L.build_in_bounds_gep arr [|idx|] "tmp" builder in
             L.build_load p "tmp" builder
-      | SMutateList((e1, i), e2) as ex ->
+      | SMutateList((e1, i), e2) ->
             let arr = build_expr builder env e1 in
             let idx = build_expr builder env i in
             let value = build_expr builder env e2 in
@@ -451,7 +449,7 @@ let translate top_level =
             let frame' = add_local builder env (t, id) in
             (* Allocate lists *)
             ignore(match t with
-              | (SListT(typ, l)) as lst ->
+              | (SListT(typ, l)) ->
                     let t = ltype_of_typ typ [||] in
                     let n_elts = build_expr builder env l in
                     let ptr_to_heap = L.build_array_malloc t n_elts "tmp" builder in
