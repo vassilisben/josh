@@ -1,11 +1,24 @@
 int main() {
     int[3] x;
-    x = [1,2,5];
-    x[0] = 10;
+    x[0] = 1;
+    x[1] = 2;
+    x[2] = 3;
     echoi(x[0]);
     echoi(x[1]);
     echoi(x[2]);
-    x[4] = 7;
-    echoi(x[4]);
+    x = [4,5,6];
+    echoi(x[0]);
+    echoi(x[1]);
+    echoi(x[2]);
+
+    int n = x[2];
+    int[n] y = [1,2,3,4,5,6];
+    int i;
+    for(i=0; i<n; i=i+1) {
+        echoi(y[i]);
+    }
+
+    if (n ==1)
+
     return 0;
 }
