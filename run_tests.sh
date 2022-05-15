@@ -1,6 +1,6 @@
 clang -c -pthread -emit-llvm liberate_josh.c
 ocamlbuild -pkgs llvm,llvm.bitreader,llvm.linker josh.native
-chmod -R a+rX tests
+# chmod -R a+rX tests
 test_files=(`ls tests/*.josh`)
 counter=1
 echo "---Running Tests for Josh---"
@@ -23,7 +23,7 @@ do
         possible_error=`cat $out_file`
         if [[ "$possible_error" = "Fatal error"* ]]; then
             echo "$counter. $test_name: FAIL; $possible_error"
-            break
+            rm $out_file; break
         fi
         output=`lli $out_file`
         rm $out_file

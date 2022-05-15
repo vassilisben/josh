@@ -146,6 +146,11 @@ let translate top_level =
   let bash_func : L.llvalue =
     L.declare_function "fork_exec" bash_t josh_module in
 
+  let scanf_t : L.lltype =
+    L.function_type (L.pointer_type i8_t) [| i32_t |] in
+  let scanf_func : L.llvalue =
+    L.declare_function "josh_scanf" scanf_t josh_module in
+
   let subset_t : L.lltype =
     L.function_type (L.pointer_type i8_t) [| L.pointer_type i8_t; i32_t; i32_t |] in
   let subset_func : L.llvalue =
@@ -190,6 +195,21 @@ let translate top_level =
 		L.function_type i32_t [| float_type |] in
 	let fti_func : L.llvalue =
 		L.declare_function "float_to_int" fti_t josh_module in
+
+  let sti_t : L.lltype =
+    L.function_type i32_t [| L.pointer_type i8_t |] in
+  let sti_func : L.llvalue =
+    L.declare_function "str_to_int" sti_t josh_module in
+
+  let its_t : L.lltype =
+    L.function_type (L.pointer_type i8_t) [| i32_t |] in
+  let its_func : L.llvalue =
+    L.declare_function "int_to_str" its_t josh_module in
+
+  let getchar_t : L.lltype =
+    L.function_type i32_t [| |] in
+  let getchar_func : L.llvalue =
+    L.declare_function "getchar" its_t josh_module in
 
 		(* END OF STANDARD LIBRARY *)
 
@@ -338,9 +358,13 @@ let translate top_level =
       | SCall ("echof", [e]) -> L.build_call printf_func [| flt_format_str ; (build_expr builder env e) |] "printf" builder
 			| SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder env e) |] "fork_exec" builder
+      | SCall ("input", [e]) -> L.build_call scanf_func [| (build_expr builder env e) |] "josh_scanf" builder
 			| SCall ("sqrt", [e]) -> L.build_call sqrt_func [| (build_expr builder env e) |] "josh_sqrt" builder
 			| SCall ("fsqrt", [e]) -> L.build_call fsqrt_func [| (build_expr builder env e) |] "josh_sqrt2" builder
 			| SCall ("int_to_float", [e]) -> L.build_call itf_func [| (build_expr builder env e) |] "int_to_float" builder
+      | SCall ("str_to_int", [e]) -> L.build_call sti_func [| (build_expr builder env e) |] "str_to_int" builder
+      | SCall ("getchar", [e]) -> L.build_call getchar_func [| (build_expr builder env e) |] "getchar" builder
+      | SCall ("int_to_str", [e]) -> L.build_call its_func [| (build_expr builder env e) |] "int_to_str" builder
 			| SCall ("float_to_int", [e]) -> L.build_call fti_func [| (build_expr builder env e) |] "float_to_int" builder
       | SCall ("pow", args) ->
         let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in

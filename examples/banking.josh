@@ -1,0 +1,89 @@
+record Customer {
+    int bal,
+    string name,
+    string pwd
+};
+
+int main() {
+    record Customer c;
+
+    echo("Welcome to Josh Banking! Please follow the instructions below to create a new account.");
+    echo("Enter a username: ");
+    string name = input(20);
+    echo("Enter a password: ");
+    string pwd = input(20);
+
+    c.bal = 0;
+    c.name = name;
+    c.pwd = pwd;
+    echo("Thank you for signing up!");
+
+    string res;
+    bool logged_in = true;
+    while(true) {
+        if (logged_in == true){
+            echo("Select an action by entering its number:\n1.View Balance\n2.Deposit\n3.Withdraw\n4.Log out");
+            res = input(1);
+            int selection = str_to_int(res);
+
+            if (selection == 1) {
+                string num = int_to_str(c.bal);
+                string text = concat("Your balance is $", num);
+                echo(text);
+            }
+            else if (selection == 2) {
+                echo("How much would you like to deposit?");
+                res = input(3);
+                int x = str_to_int(res);
+                c.bal = c.bal + x;
+                string num = int_to_str(c.bal);
+                string text = concat("Your balance is $", num);
+                echo(text);
+            }
+            else if (selection == 3) {
+                echo("How much would you like to withdraw?");
+                res = input(3);
+                int x = str_to_int(res);
+                c.bal = c.bal - x;
+                string num = int_to_str(c.bal);
+                string text = concat("Your balance is $", num);
+                echo(text);
+            }
+            else if (selection == 4) {
+                logged_in = false;
+                echo("You succesfully logged out.");
+            }
+            else {
+                echo("Input not recognized. Please try again.\n");
+            }
+            echo("Press any key to continue");
+            getchar(0);
+            getchar(0);
+        }
+        else {
+            echo("Would you like to log back in? (y/n)");
+            res = input(1);
+            if (strcmp(res, "y") == 0) {
+                echo("Enter your username: ");
+                string name = input(20);
+                echo("Enter your password: ");
+                string pwd = input(20);
+                bool nameCheck = (strcmp(c.name, name) == 0);
+                bool pwdCheck = (strcmp(c.pwd, pwd) == 0);
+                if (nameCheck) {
+                    if (pwdCheck) {
+                        logged_in = true;
+                        echo("Welcome back!");
+                    }
+                    else {
+                        echo("Wrong username or password. Please try again");
+                    }
+                }
+                else {
+                    echo("Wrong username or password. Please try again");
+                }
+            }
+        }
+    }
+    return 0;
+}

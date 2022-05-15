@@ -17,6 +17,25 @@ int fork_exec (char *command) {
 	return 0;
 }
 
+char *josh_scanf(int n) {
+	char str[n];
+	scanf("%s", str);
+
+	char *ret = malloc(n);
+	strcpy(ret, str);
+	return ret;
+}
+
+int str_to_int(char *str) {
+	return (int) atoi(str);
+}
+
+char *int_to_str(int x) {
+	char *str = malloc(5);
+	sprintf(str, "%d", x);
+	return str;
+}
+
 float int_to_float (int x) {
 	return (float) (x);
 }
