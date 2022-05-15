@@ -293,7 +293,7 @@ let translate top_level =
       | e -> raise (Failure ("Expression not implemented: " ^ string_of_sexpr (SVoid,e)))
     in
 
-    let add_local (m:L.llvalue StringMap.t list) (t, n) =
+    let add_local builder (m:L.llvalue StringMap.t list) (t, n) =
       (* create space for each local var declaration *)
         let local_var = match t with
         | (SRecordType id) as r ->
@@ -374,7 +374,7 @@ let translate top_level =
 
       | SVdecl svdecl -> (match svdecl with
         | SDeclare(t, id) ->
-            let frame' = add_local env (t, id) in
+            let frame' = add_local builder env (t, id) in
             (* Allocate lists *)
             ignore(match t with
               | (SListT(typ, l)) as lst ->
@@ -386,8 +386,8 @@ let translate top_level =
               | _ -> ());
             (builder, frame'::frames)
         | SInitialize (t, id, expr) ->
-            let (_, env') as r = build_stmt builder env (SVdecl (SDeclare(t,id)))
-            in ignore(build_expr builder env' (t, SAssign(id, expr))); r
+            let (builder', env') = build_stmt builder env (SVdecl (SDeclare(t,id)))
+            in ignore(build_expr builder' env' (t, SAssign(id, expr))); (builder', env')
       )
       | SContinue -> raise (Failure ("Statement not implemented: continue"))
       | SBreak -> raise (Failure ("Statement not implemented: break"))
