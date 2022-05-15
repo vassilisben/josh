@@ -1,0 +1,12 @@
+record Coordinate { int x, int y };
+
+int main() {
+  record Coordinate coord;
+
+  coord.x = 10;
+  coord.y = 30;
+
+  echoi(coord.x + coord.y);
+
+  return 0;
+}

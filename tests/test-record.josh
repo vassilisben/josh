@@ -1,12 +1,18 @@
-record Coordinate { int x, int y };
+record Car {
+    int year,
+    float maxSpeed
+};
 
 int main() {
-  record Coordinate coord;
+    record Car myCar;
+    myCar.year = 2022;
 
-  coord.x = 10;
-  coord.y = 30;
+    record Car yourCar;
+    yourCar.year = 2000;
 
-  echoi(coord.x + coord.y);
-
-  return 0;
+    if (myCar.year > yourCar.year) {
+        echo("My car is better than yours");
+    }
+    
+    return 0;
 }

@@ -1,0 +1,3 @@
+int main() {
+    echo(42); {|echoi should be used for integers|}
+}

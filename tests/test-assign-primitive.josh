@@ -1,7 +1,9 @@
 int main() {
     bool b = true;
     int i = 42;
-    float f = 42.5;
+    {| char c = 'c'; |}
+    {| float f = 42.5; |}
     string s = "s";
+    echo("Primitives");
     return 0;
 }

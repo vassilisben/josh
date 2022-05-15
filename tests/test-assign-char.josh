@@ -1,5 +1,0 @@
-int main() {
-    char c = 'c';
-    echo("Character assigned");
-    return 0;
-}

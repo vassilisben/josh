@@ -3,8 +3,7 @@ record P { float x, float y };
 float x_cor(record P p) { return p.x; }
 float y_cor(record P p) { return p.y; }
 
-float sqrt(float a) {}
-float mag(record P p) { return sqrt(p.x*p.x + p.y*p.y); }
+float mag(record P p) { return fsqrt(p.x*p.x + p.y*p.y); }
 string float_to_string(float a) {}
 
 int main() {
