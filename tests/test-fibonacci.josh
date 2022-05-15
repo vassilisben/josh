@@ -1,3 +1,4 @@
+IGNORE
 int fib(int n) {
   if (n < 0) {
     echo("invalid input");
@@ -13,10 +14,7 @@ int fib(int n) {
   return fib(a) + fib(b);
 }
 
-
 int main() {
   echoi(fib(15));
-
   return 0;
 }
-

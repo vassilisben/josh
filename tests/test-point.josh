@@ -1,3 +1,4 @@
+IGNORE
 record P { float x, float y };
 float x_cor(record P p) { return p.x; }
 float y_cor(record P p) { return p.y; }
