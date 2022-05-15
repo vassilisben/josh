@@ -232,16 +232,21 @@ let translate top_level =
       | SListAccess(e1, e2) ->
             let arr = build_expr builder env e1 in
             let idx = build_expr builder env e2 in
+            (* TODO: add runtime exception if index out of bounds. *)
+            (*
+            let is_legal_idx =
+                let arr_length = L.array_length arr in
+                let ge0 = L.build_icmp L.Icmp.Sgt idx (L.const_int i32_t 0) "tmp" builder in
+                let lt_length = L.build_icmp L.Icmp.Slt idx (L.const_int i32_t arr_length) "tmp" builder in
+                let *)
             let p = L.build_in_bounds_gep arr [|idx|] "tmp" builder in
             L.build_load p "tmp" builder
-            (* TODO: list index out of bounds *)
       | SMutateList((e1, i), e2) as ex ->
             let arr = build_expr builder env e1 in
             let idx = build_expr builder env i in
             let value = build_expr builder env e2 in
             let p = L.build_in_bounds_gep arr [|idx|] "tmp" builder in
             L.build_store value p builder
-            (* TODO: list index out of bounds *)
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder env e) |] "fork_exec" builder
