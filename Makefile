@@ -9,6 +9,7 @@ TAR = $(SRC:.josh=.out)
 
 %.out: %.josh
 	./josh.native -l $< > $@ && lli $@
+	touch $<
 
 .PHONY: all
 all: $(TAR)
