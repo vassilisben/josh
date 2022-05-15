@@ -197,8 +197,15 @@ let translate top_level =
       | SBoolLit b                        -> L.const_int i1_t (if b then 1 else 0)
       | SStrLit s                         -> L.build_global_stringptr s "tmp" builder
       | SId id                            -> L.build_load (lookup id env) id builder
-      | SAssign (s, e)                    -> let e' = build_expr builder env e in
-        ignore(L.build_store e' (lookup s env) builder); e'
+      | SAssign (s, e)                    ->
+              let e' = build_expr builder env e in
+              let p = lookup s env in
+              ignore(if (match L.classify_value p with
+                   L.ValueKind.ConstantPointerNull -> true
+                 | _ -> false)
+                  then L.build_free p builder
+                  else build_expr builder env (SVoid, SNoexpr));
+              ignore(L.build_store e' p builder); e'
       | SBinop (e1, op, e2) ->
           let e1' = build_expr builder env e1
           and e2' = build_expr builder env e2 in
@@ -265,14 +272,6 @@ let translate top_level =
             let global_type = (L.type_by_name josh_module id) in (match global_type with
               Some t -> L.build_alloca t n builder
               | None -> raise(Failure("Unrecognized record type")))
-        (*| (SListT(typ, l)) as lst ->
-            let e = build_expr builder m l in
-            let elt_size = L.const_ptrtoint (L.const_gep (L.const_null (L.pointer_type (ltype_of_typ typ [||]))) [|L.const_int i32_t 1|]) i32_t
-            in
-            let n_bytes = L.build_mul e elt_size "tmp" builder
-            in
-            let arr_ptr = L.build_array_malloc (ltype_of_typ typ [||]) e "tmp" builder in
-            arr_ptr*)
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
         in StringMap.add n local_var (List.hd m)
     in
@@ -286,10 +285,6 @@ let translate top_level =
             let global_type = (L.type_by_name josh_module id) in (match global_type with
                 Some t -> L.build_alloca (ltype_of_typ r (L.struct_element_types t)) n builder
               | None -> raise(Failure("Unrecognized record type")))
-        (*| (SListT(typ, l)) as lst ->
-            let e = build_expr builder m l in
-            let arr_ptr = L.build_array_malloc (ltype_of_typ typ [||]) e "tmp" builder in
-            arr_ptr*)
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
       in
       ignore (L.build_store p local builder);
@@ -352,11 +347,19 @@ let translate top_level =
       | SVdecl svdecl -> (match svdecl with
         | SDeclare(t, id) ->
             let frame' = add_local env (t, id) in
+            (* Allocate lists *)
+            ignore(match t with
+              | (SListT(typ, l)) as lst ->
+                    let t = ltype_of_typ typ [||] in
+                    let n_elts = build_expr builder env l in
+                    let ptr_to_heap = L.build_array_malloc t n_elts "tmp" builder in
+                    let ptr_to_stack = lookup id (frame'::frames) in
+                    ignore(L.build_store ptr_to_heap ptr_to_stack builder);
+              | _ -> ());
             (builder, frame'::frames)
         | SInitialize (t, id, expr) ->
-            let frame' = add_local env (t, id) in
-            ignore(build_expr builder (frame'::frames) (t, SAssign(id, expr)));
-            (builder, frame'::frames)
+            let (_, env') as r = build_stmt builder env (SVdecl (SDeclare(t,id)))
+            in ignore(build_expr builder env' (t, SAssign(id, expr))); r
       )
       | SContinue -> raise (Failure ("Statement not implemented: continue"))
       | SBreak -> raise (Failure ("Statement not implemented: break"))
