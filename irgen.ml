@@ -197,8 +197,15 @@ let translate top_level =
       | SBoolLit b                        -> L.const_int i1_t (if b then 1 else 0)
       | SStrLit s                         -> L.build_global_stringptr s "tmp" builder
       | SId id                            -> L.build_load (lookup id env) id builder
-      | SAssign (s, e)                    -> let e' = build_expr builder env e in
-        ignore(L.build_store e' (lookup s env) builder); e'
+      | SAssign (s, e)                    ->
+              let e' = build_expr builder env e in
+              let p = lookup s env in
+              ignore(if (match L.classify_value p with
+                   L.ValueKind.ConstantPointerNull -> true
+                 | _ -> false)
+                  then L.build_free p builder
+                  else build_expr builder env (SVoid, SNoexpr));
+              ignore(L.build_store e' p builder); e'
       | SBinop (e1, op, e2) ->
           let e1' = build_expr builder env e1
           and e2' = build_expr builder env e2 in
@@ -219,31 +226,34 @@ let translate top_level =
           ) e1' e2' "tmp" builder
       | SListLit(exprs) ->
             let t = ltype_of_typ (fst (List.hd exprs)) [||] in
-            let n_bytes = L.const_mul (L.const_int i32_t (List.length exprs))
-                                      (L.size_of (ltype_of_typ (fst (List.hd exprs)) [||]))
-            in
-            let arr_ptr = L.build_array_malloc t n_bytes "tmp" builder in
-            fst (List.fold_left
-              (fun (agg,idx) e ->
-                  (*(L.build_insertvalue agg
-                    (build_expr builder env e) idx "tmp" builder,*)
-                  (let e' = build_expr builder env e in
-                  let arr_ptr' = L.build_gep agg [|L.const_int i32_t idx; L.const_int i32_t 0|] "tmp" builder in
-                  L.build_store e' arr_ptr builder,
-                  idx+1)) (arr_ptr, 0) exprs)
+            let n_elts = L.const_int i32_t (List.length exprs) in
+            let arr_ptr = L.build_array_malloc t n_elts "tmp" builder in
+            let _ = List.fold_left
+              (fun idx e ->
+                  let e' = build_expr builder env e in
+                  let arr_ptr' = L.build_in_bounds_gep arr_ptr [|L.const_int i32_t idx|] "tmp" builder in
+                  ignore(L.build_store e' arr_ptr' builder);
+                  idx+1)
+              0 exprs
+            in arr_ptr
       | SListAccess(e1, e2) ->
             let arr = build_expr builder env e1 in
             let idx = build_expr builder env e2 in
-            let p = L.build_gep arr [|idx|] "tmp" builder in
+            (* TODO: add runtime exception if index out of bounds. *)
+            (*
+            let is_legal_idx =
+                let arr_length = L.array_length arr in
+                let ge0 = L.build_icmp L.Icmp.Sgt idx (L.const_int i32_t 0) "tmp" builder in
+                let lt_length = L.build_icmp L.Icmp.Slt idx (L.const_int i32_t arr_length) "tmp" builder in
+                let *)
+            let p = L.build_in_bounds_gep arr [|idx|] "tmp" builder in
             L.build_load p "tmp" builder
-            (* TODO: list index out of bounds *)
       | SMutateList((e1, i), e2) as ex ->
             let arr = build_expr builder env e1 in
             let idx = build_expr builder env i in
             let value = build_expr builder env e2 in
-            let p = L.build_gep arr [|idx; L.const_int i32_t 0|] "tmp" builder in
+            let p = L.build_in_bounds_gep arr [|idx|] "tmp" builder in
             L.build_store value p builder
-            (* TODO: list index out of bounds *)
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder env e) |] "fork_exec" builder
@@ -262,10 +272,6 @@ let translate top_level =
             let global_type = (L.type_by_name josh_module id) in (match global_type with
               Some t -> L.build_alloca t n builder
               | None -> raise(Failure("Unrecognized record type")))
-        | (SListT(typ, l)) as lst ->
-            let e = build_expr builder m l in
-            let arr_ptr = L.build_array_malloc (ltype_of_typ typ [||]) e "tmp" builder in
-            arr_ptr
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
         in StringMap.add n local_var (List.hd m)
     in
@@ -274,16 +280,11 @@ let translate top_level =
     let add_formal m (t, n) p =
       L.set_value_name n p;
 
-      (* TODO: expand to support records/lists *)
       let local = match t with
         | (SRecordType id) as r ->
             let global_type = (L.type_by_name josh_module id) in (match global_type with
                 Some t -> L.build_alloca (ltype_of_typ r (L.struct_element_types t)) n builder
               | None -> raise(Failure("Unrecognized record type")))
-        | (SListT(typ, l)) as lst ->
-            let e = build_expr builder m l in
-            let arr_ptr = L.build_array_malloc (ltype_of_typ typ [||]) e "tmp" builder in
-            arr_ptr
         | _ -> L.build_alloca (ltype_of_typ t [||]) n builder
       in
       ignore (L.build_store p local builder);
@@ -346,11 +347,19 @@ let translate top_level =
       | SVdecl svdecl -> (match svdecl with
         | SDeclare(t, id) ->
             let frame' = add_local env (t, id) in
+            (* Allocate lists *)
+            ignore(match t with
+              | (SListT(typ, l)) as lst ->
+                    let t = ltype_of_typ typ [||] in
+                    let n_elts = build_expr builder env l in
+                    let ptr_to_heap = L.build_array_malloc t n_elts "tmp" builder in
+                    let ptr_to_stack = lookup id (frame'::frames) in
+                    ignore(L.build_store ptr_to_heap ptr_to_stack builder);
+              | _ -> ());
             (builder, frame'::frames)
         | SInitialize (t, id, expr) ->
-            let frame' = add_local env (t, id) in
-            ignore(build_expr builder (frame'::frames) (t, SAssign(id, expr)));
-            (builder, frame'::frames)
+            let (_, env') as r = build_stmt builder env (SVdecl (SDeclare(t,id)))
+            in ignore(build_expr builder env' (t, SAssign(id, expr))); r
       )
       | SContinue -> raise (Failure ("Statement not implemented: continue"))
       | SBreak -> raise (Failure ("Statement not implemented: break"))
