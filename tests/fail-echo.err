@@ -1,1 +1,1 @@
-illegal argument
+exception Failure("illegal argument found int expected string in 42")

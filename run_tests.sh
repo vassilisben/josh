@@ -41,7 +41,7 @@ do
         then
             echo "$counter. $test_name: PASS"
         else
-            echo "$counter. $test_name: FAIL $output"
+            echo "$counter. $test_name: FAIL\nOUTPUT: $output"
             break
         fi
     else

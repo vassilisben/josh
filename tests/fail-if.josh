@@ -1,0 +1,7 @@
+int main() {
+    int a = 1;
+    if (a) {
+        echo("similarly, wrong");
+    }
+    return 0;
+}

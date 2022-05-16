@@ -1,0 +1,7 @@
+record Sample {int number};
+
+int main() {
+    record Sample s;
+    s.name = "Josh";
+    return 0;
+}

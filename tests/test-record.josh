@@ -1,13 +1,15 @@
 record Car {
-    int year,
-    float maxSpeed
+    int maxSpeed,
+    int year
 };
 
 int main() {
     record Car myCar;
+    myCar.maxSpeed = 150;
     myCar.year = 2022;
 
     record Car yourCar;
+    yourCar.maxSpeed = 100;
     yourCar.year = 2000;
 
     if (myCar.year > yourCar.year) {

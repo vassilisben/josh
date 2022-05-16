@@ -1,9 +1,12 @@
-This is the Hello World deliverable for PLT group Josh.
-Members: Angel Garcia, Burcu Cetin, Bora Elci, Gregory Schare, Vasileios
-Benopoulos.
+PLT Group Josh
+Members: Angel Garcia, Burcu Cetin, Bora Elci, Gregory Schare, Vasileios Benopoulos.
 
-Our deliverable include the scanner, parser, ast, sast and semantics checker.
-The final three were largely based off of the MicroC code shown in class.
+Our deliverable includes the scanner, parser, ast, sast, semantics checker, and irgen.
+
+### Build the standard library
+```
+clang -c -pthread -emit-llvm liberate_josh.c
+```
 
 ### Build the Josh compiler
 
@@ -21,14 +24,13 @@ ocamlbuild -pkgs llvm,llvm.bitreader,llvm.linker josh.native
 lli simple.out
 ```
 
+-------
 ### Testing
 ```
-chmod 755 run_tests.sh
 ./run_tests.sh
 ```
 
--------
-### To build our C library (liberate_josh.bc)
+### Run the interactive Banking Example
 ```
-clang -c -pthread -emit-llvm liberate_josh.c
+./josh.native < examples/banking.josh > banking.out && lli banking.out
 ```

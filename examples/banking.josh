@@ -44,10 +44,18 @@ int main() {
                 echo("How much would you like to withdraw?");
                 res = input(3);
                 int x = str_to_int(res);
-                c.bal = c.bal - x;
-                string num = int_to_str(c.bal);
-                string text = concat("Your balance is $", num);
-                echo(text);
+
+                if (c.bal < x) {
+                    string num = int_to_str(c.bal);
+                    string text = concat("Sorry. Your balance is only $", num);
+                    echo(text);
+                }
+                else {
+                    c.bal = c.bal - x;
+                    string num = int_to_str(c.bal);
+                    string text = concat("Your balance is $", num);
+                    echo(text);
+                }
             }
             else if (selection == 4) {
                 logged_in = false;
@@ -56,7 +64,7 @@ int main() {
             else {
                 echo("Input not recognized. Please try again.\n");
             }
-            echo("Press any key to continue");
+            echo("Press ENTER to continue");
             getchar(0);
             getchar(0);
         }

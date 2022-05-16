@@ -1,0 +1,8 @@
+int main() {
+    int i = 10;
+
+    while(i) {
+        echo("wrong");
+    }
+    return 0;
+}

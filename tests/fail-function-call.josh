@@ -1,0 +1,6 @@
+int fail_return_type(int a) { return "string. not integer"; }
+
+int main() {
+    fail_return_type(0);
+    return 0;
+}
