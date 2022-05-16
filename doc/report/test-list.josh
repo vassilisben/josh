@@ -1,0 +1,18 @@
+int main() {
+    string[5] students;
+    students[0] = "Angel";
+    students[1] = "Bora";
+    students[2] = "Burcu";
+    students[3] = "Gregory";
+    students[4] = "Vas";
+
+    students[3] = "Greg";
+
+    int i;
+    while (i<5) {
+        echo(students[i]);
+        i = i+1;
+    }
+
+    return 0;
+}
