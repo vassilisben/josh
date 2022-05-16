@@ -4,15 +4,12 @@ open Sast
 
 module StringMap = Map.Make(String)
 
-(* TODO
- * records
- *   pass record inside function (fix formals)
- * lists...
- * record access
- * standard library things?
- * write the report
- * make the video
- *)
+(* Highlights:
+    * Scope
+    * Lists
+    * Records
+    * Nested statements
+    *)
 
 let translate top_level =
   (* boilerplate *)
@@ -37,13 +34,7 @@ let translate top_level =
     | SVoid          -> void_type
     | SString        -> L.pointer_type (L.i8_type context)
     | SRecordType id -> record_type arr
-    | SListT (ty,l)  ->
-            (*let e = try (* check if l is a constant expression? *)
-            if is_some e
-            then
-                array_type (ltype_of_typ ty [||]) 0 (* Allocate on stack. *)
-            else*)
-                L.pointer_type (ltype_of_typ ty [||]) (* Allocate on heap. *)
+    | SListT (ty,l)  -> L.pointer_type (ltype_of_typ ty [||]) (* Allocate on heap. *)
     | _ -> i32_t
   in
 
@@ -85,7 +76,6 @@ let translate top_level =
       SIntLit i                      -> L.const_int i32_t i
     | SBoolLit b                     -> L.const_int i1_t (if b then 1 else 0)
     | SStrLit s                      -> L.const_string context s
-    (*| SId id                         -> build_global_expr env (StringMap.find id env)*)
     | SBinop (e1, op, e2) ->
         let e1' = build_global_expr env e1
         and e2' = build_global_expr env e2 in
@@ -163,37 +153,37 @@ let translate top_level =
   let concat_func : L.llvalue =
     L.declare_function "josh_concat" concat_t josh_module in
 
-	let sqrt_t : L.lltype =
-		L.function_type float_type [| i32_t |] in
-	let sqrt_func : L.llvalue =
-		L.declare_function "josh_sqrt" sqrt_t josh_module in
+  let sqrt_t : L.lltype =
+    L.function_type float_type [| i32_t |] in
+  let sqrt_func : L.llvalue =
+    L.declare_function "josh_sqrt" sqrt_t josh_module in
 
-	let fsqrt_t : L.lltype =
-		L.function_type float_type [| float_type |] in
-	let fsqrt_func : L.llvalue =
-		L.declare_function "josh_sqrt2" fsqrt_t josh_module in
+  let fsqrt_t : L.lltype =
+      L.function_type float_type [| float_type |] in
+  let fsqrt_func : L.llvalue =
+      L.declare_function "josh_sqrt2" fsqrt_t josh_module in
 
-	let pow_t : L.lltype =
-		L.function_type i32_t [| i32_t; i32_t |] in
-	let pow_func : L.llvalue =
-		L.declare_function "josh_pow" pow_t josh_module in
+  let pow_t : L.lltype =
+      L.function_type i32_t [| i32_t; i32_t |] in
+  let pow_func : L.llvalue =
+      L.declare_function "josh_pow" pow_t josh_module in
 
-	let fpow_t : L.lltype =
-		L.function_type float_type [| float_type; float_type |] in
-	let fpow_func : L.llvalue =
-		L.declare_function "josh_pow2" fpow_t josh_module in
+  let fpow_t : L.lltype =
+      L.function_type float_type [| float_type; float_type |] in
+  let fpow_func : L.llvalue =
+      L.declare_function "josh_pow2" fpow_t josh_module in
 
-	let itf_t : L.lltype =
-		L.function_type float_type [| i32_t |] in
-	let itf_func : L.llvalue =
-		L.declare_function "int_to_float" itf_t josh_module in
+  let itf_t : L.lltype =
+      L.function_type float_type [| i32_t |] in
+  let itf_func : L.llvalue =
+      L.declare_function "int_to_float" itf_t josh_module in
 
-	let fti_t : L.lltype =
-		L.function_type i32_t [| float_type |] in
-	let fti_func : L.llvalue =
-		L.declare_function "float_to_int" fti_t josh_module in
+  let fti_t : L.lltype =
+      L.function_type i32_t [| float_type |] in
+  let fti_func : L.llvalue =
+      L.declare_function "float_to_int" fti_t josh_module in
 
-		(* END OF STANDARD LIBRARY *)
+  (* END OF STANDARD LIBRARY *)
 
   (* create llvm function declarations using the function declarations from source *)
   let function_decls : (L.llvalue * sfdecl) StringMap.t =
@@ -219,7 +209,7 @@ let translate top_level =
 
     let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder
     and str_format_str = L.build_global_stringptr "%s\n" "fmt" builder
-		and flt_format_str = L.build_global_stringptr "%f\n" "fmt" builder in
+    and flt_format_str = L.build_global_stringptr "%f\n" "fmt" builder in
 
     let rec lookup n = function
         [] -> raise (Failure ("Not found: " ^ n))
@@ -232,7 +222,7 @@ let translate top_level =
       let rec build_record_ptr_helper lltype_list sexpr_list = match sexpr_list with
       | [] -> lltype_list
       | hd::tl ->
-          let ((typ,_) : sexpr) = hd in (build_record_ptr_helper ((ltype_of_typ typ [||])::lltype_list) tl) (* no support for nested records yet *)
+          let ((typ,_) : sexpr) = hd in (build_record_ptr_helper ((ltype_of_typ typ [||])::lltype_list) tl)
       in
 
       let record_types_list = (build_record_ptr_helper [] sexpr_list) in
@@ -261,7 +251,7 @@ let translate top_level =
       | SNoexpr -> L.build_add (L.const_int i32_t 0) (L.const_int i32_t 0) "tmp" builder
       | SIntLit i                         -> L.const_int i32_t i
       | SRecordCreate (id, sexpr_list)    -> let global_type = (L.type_by_name josh_module id) in (match global_type with
-                                               Some t -> (L.build_alloca t id builder) (*L.build_alloca (record_type (build_record_ltypes_array sexpr_list)) id builder*)
+                                               Some t -> (L.build_alloca t id builder)
                                                | None -> raise(Failure("Unrecognized record type")))
       | SMutateRecord(((typ, SId(id)), member), new_value) -> let record_ptr = (lookup id env) in
                                                               let member_ptr = L.build_struct_gep record_ptr (get_member_index typ member) member builder in
@@ -321,7 +311,10 @@ let translate top_level =
       | SListAccess(e1, e2) ->
             let arr = build_expr builder env e1 in
             let idx = build_expr builder env e2 in
-            (* TODO: add runtime exception if index out of bounds. *)
+            (* We prepared code to emit a runtime exception if the index is out
+             * of bounds, but we could not find documentation on how to throw
+             * a failure at runtime in LLVM. Here is the code to check:
+             *)
             (*
             let is_legal_idx =
                 let arr_length = L.array_length arr in
@@ -338,28 +331,28 @@ let translate top_level =
             L.build_store value p builder
       | SCall ("echoi", [e]) -> L.build_call printf_func [| int_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("echof", [e]) -> L.build_call printf_func [| flt_format_str ; (build_expr builder env e) |] "printf" builder
-			| SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
+      | SCall ("echo", [e]) -> L.build_call printf_func [| str_format_str ; (build_expr builder env e) |] "printf" builder
       | SCall ("bash", [e]) -> L.build_call bash_func [| (build_expr builder env e) |] "fork_exec" builder
-			| SCall ("sqrt", [e]) -> L.build_call sqrt_func [| (build_expr builder env e) |] "josh_sqrt" builder
-			| SCall ("fsqrt", [e]) -> L.build_call fsqrt_func [| (build_expr builder env e) |] "josh_sqrt2" builder
-			| SCall ("int_to_float", [e]) -> L.build_call itf_func [| (build_expr builder env e) |] "int_to_float" builder
-			| SCall ("float_to_int", [e]) -> L.build_call fti_func [| (build_expr builder env e) |] "float_to_int" builder
+      | SCall ("sqrt", [e]) -> L.build_call sqrt_func [| (build_expr builder env e) |] "josh_sqrt" builder
+      | SCall ("fsqrt", [e]) -> L.build_call fsqrt_func [| (build_expr builder env e) |] "josh_sqrt2" builder
+      | SCall ("int_to_float", [e]) -> L.build_call itf_func [| (build_expr builder env e) |] "int_to_float" builder
+      | SCall ("float_to_int", [e]) -> L.build_call fti_func [| (build_expr builder env e) |] "float_to_int" builder
       | SCall ("pow", args) ->
         let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         L.build_call pow_func (Array.of_list llargs) "josh_pow" builder
-      | SCall ("fpow", args) -> 
+      | SCall ("fpow", args) ->
         let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         L.build_call fpow_func (Array.of_list llargs) "josh_pow2" builder
-      | SCall ("concat", args) -> 
+      | SCall ("concat", args) ->
         let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         L.build_call concat_func (Array.of_list llargs) "josh_concat" builder
-      | SCall ("subset", args) -> 
+      | SCall ("subset", args) ->
         let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         L.build_call subset_func (Array.of_list llargs) "josh_subset" builder
-      | SCall ("strcmp", args) -> 
+      | SCall ("strcmp", args) ->
         let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         L.build_call strcmp_func (Array.of_list llargs) "josh_strcmp" builder
-			| SCall (f, args) ->
+      | SCall (f, args) ->
         let (fdef, fdecl) = StringMap.find f function_decls in
         let llargs = List.rev (List.map (build_expr builder env) (List.rev args)) in
         let result = f ^ "_result" in
@@ -410,8 +403,6 @@ let translate top_level =
         SBlock sl -> List.fold_left (fun (a,b) x -> build_stmt a b x) (builder,env) sl
       | SExpr e -> ignore(build_expr builder env e); (builder, env)
       | SReturn e -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env)
-      (*| SContinue -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env) (* TODO *) *)
-      (*| SBreak -> ignore(L.build_ret (build_expr builder env e) builder); (builder,env)  (* TODO *) *)
       | SWhile (predicate, body) ->
         let while_bb = L.append_block context "while" the_function in
         let build_br_while = L.build_br while_bb in (* partial function *)
