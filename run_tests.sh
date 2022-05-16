@@ -1,6 +1,6 @@
 clang -c -pthread -emit-llvm liberate_josh.c
 ocamlbuild -pkgs llvm,llvm.bitreader,llvm.linker josh.native
-chmod -R a+rX tests
+# chmod -R a+rX tests
 test_files=(`ls tests/*.josh`)
 counter=1
 echo "---Running Tests for Josh---"
@@ -17,12 +17,17 @@ do
     out_file="$file_name.out"
     ./josh.native -l $josh_file > $out_file 2>&1
     suc_file="$file_name.suc"
-    err_file="$file_name.err"
+    err_file="$file_name.err"   
     if [ -f "$suc_file" ]; then
         expected=`cat $suc_file`
+        possible_error=`cat $out_file`
+        if [[ "$possible_error" = "Fatal error"* ]]; then
+            echo "$counter. $test_name: FAIL; $possible_error"
+            rm $out_file; break
+        fi
         output=`lli $out_file`
         rm $out_file
-        if [ "$output" = "$expected" ]
+        if [[ "$output" = "$expected" ]]
         then
             echo "$counter. $test_name: PASS"
         else
@@ -32,7 +37,7 @@ do
         expected=`cat $err_file`
         output=`cat $out_file`
         rm $out_file
-        if [ "$output" = "$expected" ]
+        if [[ "$output" = *"$expected"* ]]
         then
             echo "$counter. $test_name: PASS"
         else

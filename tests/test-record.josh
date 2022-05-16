@@ -1,0 +1,18 @@
+record Car {
+    int year,
+    float maxSpeed
+};
+
+int main() {
+    record Car myCar;
+    myCar.year = 2022;
+
+    record Car yourCar;
+    yourCar.year = 2000;
+
+    if (myCar.year > yourCar.year) {
+        echo("My car is better than yours");
+    }
+    
+    return 0;
+}

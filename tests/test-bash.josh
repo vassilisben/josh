@@ -1,0 +1,4 @@
+int main() {
+    bash("echo success");
+    return 0;
+}

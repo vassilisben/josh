@@ -1,9 +1,8 @@
-This is the Hello World deliverable for PLT group josh.
+This is the Hello World deliverable for PLT group Josh.
 Members: Angel Garcia, Burcu Cetin, Bora Elci, Gregory Schare, Vasileios
 Benopoulos.
 
-Our deliverable includes An example test file (point.josh) as well as a 
-scanner, a parser, ast, sast and semantics checker.
+Our deliverable include the scanner, parser, ast, sast and semantics checker.
 The final three were largely based off of the MicroC code shown in class.
 
 ### Build the Josh compiler

@@ -1,0 +1,9 @@
+int main() {
+    bool b;
+    b = true;
+
+    if (b == true) {
+        echo("its true");
+    }
+    return 0;
+}

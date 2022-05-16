@@ -1,4 +1,3 @@
-IGNORE
 int fib(int n) {
   if (n < 0) {
     echo("invalid input");

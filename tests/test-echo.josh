@@ -1,0 +1,5 @@
+int main() {
+    echo("String");
+    echoi(1);
+    return 0;
+}
